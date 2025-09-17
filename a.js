@@ -1,4 +1,4 @@
-// Senja.io 评论提取脚本 - 按照Amazon脚本模式修正
+// Senja.io 评论提取脚本 - 实用版（参考Amazon脚本模式）
 const TARGET_URL = args.url || 'https://senja.io/p/empathia/FPhVcvz';
 const MAX_TESTIMONIALS = args.maxTestimonials || 50;
 const INCLUDE_METADATA = args.includeMetadata !== false;
@@ -18,22 +18,46 @@ function getRandomDelay(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// 模拟人类滚动行为
+async function humanScroll(page, distance, direction = 'down') {
+  const scrollSteps = Math.floor(Math.abs(distance) / 100);
+  const scrollDirection = direction === 'down' ? 1 : -1;
+
+  for (let i = 0; i < scrollSteps; i++) {
+    const scrollAmount = getRandomDelay(80, 120) * scrollDirection;
+    await page.evaluate((amount) => {
+      window.scrollBy(0, amount);
+    }, scrollAmount);
+    await page.waitForTimeout(getRandomDelay(50, 150));
+  }
+}
+
+// 模拟鼠标移动
+async function simulateMouseMovement(page, fromX, fromY, toX, toY) {
+  const steps = 20;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const currentX = fromX + (toX - fromX) * t + Math.random() * 10 - 5;
+    const currentY = fromY + (toY - fromY) * t + Math.random() * 10 - 5;
+    await page.mouse.move(currentX, currentY);
+    await page.waitForTimeout(getRandomDelay(10, 30));
+  }
+}
+
 async function autoScrollToLoadContent(page) {
   let previousHeight = 0;
   let currentHeight = await page.evaluate(() => document.body.scrollHeight);
   let scrollAttempts = 0;
-  const maxScrollAttempts = 10;
+  const maxScrollAttempts = 8;
 
   while (previousHeight !== currentHeight && scrollAttempts < maxScrollAttempts) {
     previousHeight = currentHeight;
 
-    // 滚动到页面底部
-    await page.evaluate(() => {
-      window.scrollTo(0, document.body.scrollHeight);
-    });
+    // 人类化滚动
+    await humanScroll(page, getRandomDelay(300, 800), 'down');
 
-    // 等待内容加载
-    await page.waitForTimeout(getRandomDelay(2000, 4000));
+    // 随机等待
+    await page.waitForTimeout(getRandomDelay(1500, 3000));
 
     currentHeight = await page.evaluate(() => document.body.scrollHeight);
     scrollAttempts++;
@@ -44,68 +68,146 @@ async function autoScrollToLoadContent(page) {
   console.error(`✅ 滚动完成，共尝试 ${scrollAttempts} 次`);
 }
 
-// ==================== 主逻辑 - 直接在顶层执行 ====================
+// ==================== 主逻辑 - 参考Amazon脚本模式 ====================
 
 try {
-  // 导航到目标页面
-  console.error('🚀 导航到目标页面...');
-  await page.goto(TARGET_URL, {
-    waitUntil: 'networkidle',
-    timeout: EXTRACTION_TIMEOUT,
+  console.error('🌐 开始导航，使用人类化行为...');
+
+  // 设置额外的HTTP头
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
   });
 
-  // 等待评论容器
-  await page.waitForSelector('.sj-wol-testimonials', { timeout: EXTRACTION_TIMEOUT });
-  console.error('✅ 找到评论容器');
+  // 导航到页面 - 使用更宽松的等待条件
+  await page.goto(TARGET_URL, {
+    waitUntil: 'domcontentloaded', // 更快的加载条件
+    timeout: 30000,
+  });
 
-  // 滚动加载更多评论
-  if (SCROLL_TO_LOAD) {
+  // 随机初始等待
+  await page.waitForTimeout(getRandomDelay(1500, 3000));
+
+  console.error('✅ 页面加载完成');
+
+  // 获取页面基本信息
+  const pageTitle = await page.title();
+  const currentUrl = page.url();
+  console.error(`📄 页面标题: ${pageTitle}`);
+  console.error(`🌐 当前URL: ${currentUrl}`);
+
+  // 模拟初始鼠标移动
+  await simulateMouseMovement(
+    page,
+    Math.random() * 100,
+    Math.random() * 100,
+    Math.random() * 800 + 100,
+    Math.random() * 400 + 100
+  );
+
+  // 小幅度初始滚动，模拟人类行为
+  await humanScroll(page, getRandomDelay(100, 300), 'down');
+  await page.waitForTimeout(getRandomDelay(500, 1000));
+
+  // 等待主要内容容器，但不要太严格
+  console.error('🔍 等待页面内容...');
+  try {
+    await page.waitForSelector('.sj-wol-testimonials, .sj-masonry, .sj-card-wall', {
+      timeout: 15000,
+    });
+    console.error('✅ 找到主要内容容器');
+  } catch (error) {
+    console.error('⚠️ 主容器等待超时，尝试继续...');
+  }
+
+  // 等待页面稳定
+  await page.waitForTimeout(2000);
+
+  // 检查页面结构
+  const pageStructure = await page.evaluate(() => {
+    return {
+      hasWolTestimonials: !!document.querySelector('.sj-wol-testimonials'),
+      hasMasonryItems: !!document.querySelector('.sj-masonry-item'),
+      hasTextCards: !!document.querySelector('.sj-text-card'),
+      totalCards: document.querySelectorAll('.sj-masonry-item .sj-text-card').length,
+      totalMasonryItems: document.querySelectorAll('.sj-masonry-item').length,
+    };
+  });
+
+  console.error('📊 页面结构:', JSON.stringify(pageStructure, null, 2));
+
+  // 滚动加载更多内容
+  if (SCROLL_TO_LOAD && pageStructure.hasWolTestimonials) {
     console.error('🔄 开始滚动加载更多评论...');
     await autoScrollToLoadContent(page);
+
+    // 滚动后再次检查
+    const updatedStructure = await page.evaluate(() => {
+      return {
+        totalCards: document.querySelectorAll('.sj-masonry-item .sj-text-card').length,
+        totalMasonryItems: document.querySelectorAll('.sj-masonry-item').length,
+      };
+    });
+    console.error('📊 滚动后结构:', JSON.stringify(updatedStructure, null, 2));
   }
 
   // 等待内容稳定
   await page.waitForTimeout(WAIT_FOR_LOAD);
 
   // 提取评论数据
+  console.error('📤 开始提取评论数据...');
   const testimonials = await page.evaluate((maxTestimonials) => {
-    // 使用正确的选择器：.sj-masonry-item 内的 .sj-text-card
     const cards = document.querySelectorAll('.sj-masonry-item .sj-text-card');
     const results = [];
+
+    console.log(`找到 ${cards.length} 个评论卡片，准备提取最多 ${maxTestimonials} 个`);
 
     for (let i = 0; i < Math.min(cards.length, maxTestimonials); i++) {
       const card = cards[i];
 
       try {
-        // 提取评论文本 - 从 .sj-content 内的 div
-        const contentEl = card.querySelector('.sj-content div div');
-        const content = contentEl ? contentEl.textContent.trim() : '';
+        // 提取评论文本 - 尝试多个选择器
+        let content = '';
+        const contentSelectors = [
+          '.sj-content div div',
+          '.sj-content div',
+          '.sj-content',
+          '[class*="content"]',
+        ];
 
-        // 提取作者信息 - 从 .sj-endorser-name
+        for (const selector of contentSelectors) {
+          const contentEl = card.querySelector(selector);
+          if (contentEl && contentEl.textContent.trim()) {
+            content = contentEl.textContent.trim();
+            break;
+          }
+        }
+
+        // 提取作者信息
         const authorEl = card.querySelector('.sj-endorser-name');
         const author = authorEl ? authorEl.textContent.trim() : '';
 
-        // 提取头像 - 从 .sj-avatar-container img
-        const avatarEl = card.querySelector('.sj-avatar-container img');
+        // 提取头像
+        const avatarEl = card.querySelector('.sj-avatar-container img, img[src*="avatar"]');
         const avatar = avatarEl ? avatarEl.src : '';
         const avatarAlt = avatarEl ? avatarEl.alt : '';
 
-        // 提取评分 - 从星级评分容器
-        const ratingEl = card.querySelector('.sj-star-rating');
+        // 提取评分
+        const ratingEl = card.querySelector('.sj-star-rating, [class*="rating"], [class*="star"]');
         let rating = null;
         if (ratingEl) {
-          // 计算填充的星星数量或查找评分数据
           const filledStars = ratingEl.querySelectorAll('svg').length;
           if (filledStars > 0) rating = filledStars;
         }
 
-        // 提取日期 - 从 .sj-card-details 的第一个 div
-        const dateEl = card.querySelector('.sj-card-details div[style*="opacity"]');
+        // 提取日期
+        const dateEl = card.querySelector(
+          '.sj-card-details div[style*="opacity"], [class*="date"], time'
+        );
         const date = dateEl ? dateEl.textContent.trim() : '';
 
-        // 提取职位/描述 - 查找作者相关的描述信息
-        const endorserContainer = card.querySelector('.sj-endorser-view-container');
+        // 提取职位/描述
         let title = '';
+        const endorserContainer = card.querySelector('.sj-endorser-view-container');
         if (endorserContainer) {
           const titleEl = endorserContainer.querySelector(
             'div:not(.sj-endorser-name):not(.sj-avatar-container)'
@@ -116,10 +218,11 @@ try {
         }
 
         // 检查是否有附加图片
-        const attachmentEl = card.querySelector('.sj-attachment-container img');
+        const attachmentEl = card.querySelector('.sj-attachment-container img, .sj-media');
         const attachment = attachmentEl ? attachmentEl.src : '';
 
-        if (content) {
+        if (content || author) {
+          // 只要有内容或作者就保存
           results.push({
             id: `testimonial_${i + 1}`,
             content: content,
@@ -133,16 +236,21 @@ try {
             source: 'senja.io',
             extractedAt: new Date().toISOString(),
           });
+
+          console.log(`✅ 提取第 ${i + 1} 条: ${author} - ${content.substring(0, 30)}...`);
+        } else {
+          console.log(`⚠️ 第 ${i + 1} 条评论无有效内容，跳过`);
         }
       } catch (error) {
-        console.error(`Error extracting testimonial ${i + 1}:`, error);
+        console.error(`❌ 提取第 ${i + 1} 条评论时出错:`, error);
       }
     }
 
+    console.log(`🎯 成功提取 ${results.length} 条评论`);
     return results;
   }, MAX_TESTIMONIALS);
 
-  console.error(`✅ 成功提取 ${testimonials.length} 条评论`);
+  console.error(`✅ 提取完成，获得 ${testimonials.length} 条评论`);
 
   // 构建结果对象
   const result = {
@@ -154,25 +262,43 @@ try {
   };
 
   if (INCLUDE_METADATA) {
-    // 提取页面元数据
     const metadata = await page.evaluate(() => {
       return {
         title: document.title,
         description: document.querySelector('meta[name="description"]')?.content || '',
         pageHeight: document.body.scrollHeight,
         totalCards: document.querySelectorAll('.sj-masonry-item .sj-text-card').length,
+        totalMasonryItems: document.querySelectorAll('.sj-masonry-item').length,
+        url: window.location.href,
+        extractedAt: new Date().toISOString(),
       };
     });
 
     result.metadata = metadata;
+    console.error('📊 元数据提取完成');
   }
 
-  console.error('🎉 评论提取完成!');
-
-  // 直接返回结果
+  console.error('🎉 所有任务完成!');
   return result;
 } catch (error) {
-  console.error('❌ 提取过程中发生错误:', error);
+  console.error('❌ 提取过程中发生错误:', error.message);
+
+  // 获取调试信息
+  try {
+    const debugInfo = await page.evaluate(() => {
+      return {
+        url: window.location.href,
+        title: document.title,
+        hasContent: document.body.innerHTML.length > 0,
+        totalElements: document.querySelectorAll('*').length,
+        hasTestimonialContainer: !!document.querySelector('.sj-wol-testimonials'),
+      };
+    });
+    console.error('🐛 调试信息:', JSON.stringify(debugInfo, null, 2));
+  } catch (debugError) {
+    console.error('⚠️ 无法获取调试信息');
+  }
+
   return {
     success: false,
     error: error.message,
