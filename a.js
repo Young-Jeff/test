@@ -1,6 +1,6 @@
 // Senja.io 评论提取脚本 - 实用版（参考Amazon脚本模式）
 const TARGET_URL = args.url || 'https://senja.io/p/empathia/FPhVcvz';
-const MAX_TESTIMONIALS = args.maxTestimonials || 50;
+const MAX_TESTIMONIALS = args.maxTestimonials || 999999; // 默认抓取所有
 const INCLUDE_METADATA = args.includeMetadata !== false;
 const SCROLL_TO_LOAD = args.scrollToLoad !== false;
 const EXTRACTION_TIMEOUT = args.timeout || 30000;
@@ -10,8 +10,11 @@ if (!TARGET_URL) {
   throw new Error('目标URL是必需的。请提供 args.url');
 }
 
-console.error(`💬 开始提取Senja评论`);
+console.error(`💬 开始提取Senja评论 - 全量抓取模式`);
 console.error(`🎯 目标URL: ${TARGET_URL}`);
+console.error(
+  `📊 抓取配置: ${MAX_TESTIMONIALS >= 999999 ? '抓取所有评论' : `最多抓取 ${MAX_TESTIMONIALS} 条`}`
+);
 
 // ==================== 辅助函数 ====================
 function getRandomDelay(min, max) {
@@ -48,24 +51,78 @@ async function autoScrollToLoadContent(page) {
   let previousHeight = 0;
   let currentHeight = await page.evaluate(() => document.body.scrollHeight);
   let scrollAttempts = 0;
-  const maxScrollAttempts = 8;
+  let stableCount = 0; // 连续稳定次数
+  const maxScrollAttempts = 20; // 增加最大尝试次数
+  const maxStableCount = 3; // 连续3次高度不变才停止
 
-  while (previousHeight !== currentHeight && scrollAttempts < maxScrollAttempts) {
+  console.error(`🔄 开始智能滚动加载，初始高度: ${currentHeight}px`);
+
+  while (scrollAttempts < maxScrollAttempts && stableCount < maxStableCount) {
     previousHeight = currentHeight;
 
-    // 人类化滚动
-    await humanScroll(page, getRandomDelay(300, 800), 'down');
+    // 检查当前页面的评论卡片数量
+    const currentCardCount = await page.evaluate(() => {
+      return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
+    });
 
-    // 随机等待
-    await page.waitForTimeout(getRandomDelay(1500, 3000));
+    // 人类化滚动 - 分多次小幅度滚动
+    for (let i = 0; i < 3; i++) {
+      await humanScroll(page, getRandomDelay(200, 400), 'down');
+      await page.waitForTimeout(getRandomDelay(800, 1500));
+    }
 
+    // 滚动到页面底部确保触发懒加载
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    // 等待内容加载
+    await page.waitForTimeout(getRandomDelay(2000, 4000));
+
+    // 检查高度变化
     currentHeight = await page.evaluate(() => document.body.scrollHeight);
+
+    // 检查新的评论卡片数量
+    const newCardCount = await page.evaluate(() => {
+      return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
+    });
+
     scrollAttempts++;
 
-    console.error(`📜 滚动尝试 ${scrollAttempts}: 高度从 ${previousHeight} 变为 ${currentHeight}`);
+    if (currentHeight === previousHeight && newCardCount === currentCardCount) {
+      stableCount++;
+      console.error(
+        `📜 滚动尝试 ${scrollAttempts}: 高度稳定 ${currentHeight}px, 卡片数量: ${newCardCount}, 稳定次数: ${stableCount}/${maxStableCount}`
+      );
+    } else {
+      stableCount = 0; // 重置稳定计数
+      console.error(
+        `📜 滚动尝试 ${scrollAttempts}: 高度 ${previousHeight}px → ${currentHeight}px, 卡片数量: ${currentCardCount} → ${newCardCount}`
+      );
+    }
+
+    // 如果连续多次没有新内容，尝试更激进的滚动
+    if (stableCount >= 2) {
+      console.error('🚀 尝试激进滚动以加载更多内容...');
+      // 快速滚动到顶部再到底部
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(1000);
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await page.waitForTimeout(3000);
+    }
   }
 
-  console.error(`✅ 滚动完成，共尝试 ${scrollAttempts} 次`);
+  const finalCardCount = await page.evaluate(() => {
+    return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
+  });
+
+  console.error(
+    `✅ 滚动完成! 总尝试次数: ${scrollAttempts}, 最终高度: ${currentHeight}px, 总评论卡片: ${finalCardCount}`
+  );
 }
 
 // ==================== 主逻辑 - 参考Amazon脚本模式 ====================
@@ -159,9 +216,12 @@ try {
     const cards = document.querySelectorAll('.sj-masonry-item .sj-text-card');
     const results = [];
 
-    console.log(`找到 ${cards.length} 个评论卡片，准备提取最多 ${maxTestimonials} 个`);
+    // 如果maxTestimonials很大，就提取所有卡片
+    const targetCount =
+      maxTestimonials >= 999999 ? cards.length : Math.min(cards.length, maxTestimonials);
+    console.log(`找到 ${cards.length} 个评论卡片，准备提取 ${targetCount} 个`);
 
-    for (let i = 0; i < Math.min(cards.length, maxTestimonials); i++) {
+    for (let i = 0; i < targetCount; i++) {
       const card = cards[i];
 
       try {
