@@ -50,7 +50,7 @@ try {
   // 导航到目标页面
   console.error('🚀 导航到目标页面...');
   await page.goto(TARGET_URL, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: EXTRACTION_TIMEOUT,
   });
 
