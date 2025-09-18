@@ -312,12 +312,40 @@ try {
 
   console.error(`✅ 提取完成，获得 ${testimonials.length} 条评论`);
 
+  // 检测JSON大小
+  const testimonialsJson = JSON.stringify(testimonials);
+  const jsonSizeKB = Math.round(testimonialsJson.length / 1024);
+  console.error(`📏 评论数据大小: ${jsonSizeKB}KB`);
+
+  // 生成摘要统计
+  const summary = {
+    totalCount: testimonials.length,
+    withContent: testimonials.filter((t) => t.content && t.content.trim()).length,
+    withAuthor: testimonials.filter((t) => t.author && t.author !== 'Anonymous').length,
+    withRating: testimonials.filter((t) => t.rating).length,
+    withDate: testimonials.filter((t) => t.date).length,
+    withAvatar: testimonials.filter((t) => t.avatar).length,
+    withAttachment: testimonials.filter((t) => t.attachment).length,
+  };
+
+  console.error(`📊 === 数据摘要 ===`);
+  console.error(`📝 总评论数: ${summary.totalCount}`);
+  console.error(`✍️ 有内容: ${summary.withContent}`);
+  console.error(`👤 有作者: ${summary.withAuthor}`);
+  console.error(`⭐ 有评分: ${summary.withRating}`);
+  console.error(`📅 有日期: ${summary.withDate}`);
+  console.error(`🖼️ 有头像: ${summary.withAvatar}`);
+  console.error(`📎 有附件: ${summary.withAttachment}`);
+  console.error(`==================`);
+
   // 构建结果对象
   const result = {
     success: true,
     url: TARGET_URL,
     extractedAt: new Date().toISOString(),
     totalTestimonials: testimonials.length,
+    dataSizeKB: jsonSizeKB,
+    summary: summary,
     testimonials: testimonials,
   };
 
