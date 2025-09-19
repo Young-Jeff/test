@@ -1,27 +1,26 @@
-// Senja.io 评论提取脚本 - 实用版（参考Amazon脚本模式）
+// Senja.io Review Extraction Script - Optimized Version
 const TARGET_URL = args.url || 'https://senja.io/p/empathia/FPhVcvz';
-const MAX_TESTIMONIALS = args.maxTestimonials || 999999; // 默认抓取所有
+const MAX_TESTIMONIALS = args.maxTestimonials || 999999; // Default: extract all
 const INCLUDE_METADATA = args.includeMetadata !== false;
-const SCROLL_TO_LOAD = args.scrollToLoad !== false;
 const EXTRACTION_TIMEOUT = args.timeout || 30000;
 const WAIT_FOR_LOAD = args.waitForLoad || 3000;
 
 if (!TARGET_URL) {
-  throw new Error('目标URL是必需的。请提供 args.url');
+  throw new Error('Target URL is required. Please provide args.url');
 }
 
-console.error(`💬 开始提取Senja评论 - 全量抓取模式`);
-console.error(`🎯 目标URL: ${TARGET_URL}`);
+console.error(`💬 Starting Senja review extraction - Full extraction mode`);
+console.error(`🎯 Target URL: ${TARGET_URL}`);
 console.error(
-  `📊 抓取配置: ${MAX_TESTIMONIALS >= 999999 ? '抓取所有评论' : `最多抓取 ${MAX_TESTIMONIALS} 条`}`
+  `📊 Extraction config: ${MAX_TESTIMONIALS >= 999999 ? 'Extract all reviews' : `Max ${MAX_TESTIMONIALS} reviews`}`,
 );
 
-// ==================== 辅助函数 ====================
+// ==================== Helper Functions ====================
 function getRandomDelay(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// 模拟人类滚动行为
+// Simulate human-like scrolling behavior
 async function humanScroll(page, distance, direction = 'down') {
   const scrollSteps = Math.floor(Math.abs(distance) / 100);
   const scrollDirection = direction === 'down' ? 1 : -1;
@@ -35,7 +34,7 @@ async function humanScroll(page, distance, direction = 'down') {
   }
 }
 
-// 模拟鼠标移动
+// Simulate mouse movement
 async function simulateMouseMovement(page, fromX, fromY, toX, toY) {
   const steps = 20;
   for (let i = 0; i <= steps; i++) {
@@ -47,139 +46,97 @@ async function simulateMouseMovement(page, fromX, fromY, toX, toY) {
   }
 }
 
-async function autoScrollToLoadContent(page) {
-  let previousHeight = 0;
-  let currentHeight = await page.evaluate(() => document.body.scrollHeight);
-  let scrollAttempts = 0;
-  let stableCount = 0; // 连续稳定次数
-  const maxScrollAttempts = 20; // 增加最大尝试次数
-  const maxStableCount = 3; // 连续3次高度不变才停止
+// Simplified content loading - since there's no pagination
+async function ensureAllContentLoaded(page) {
+  console.error(`🔄 Starting simplified content loading...`);
 
-  console.error(`🔄 开始智能滚动加载，初始高度: ${currentHeight}px`);
+  // Get initial card count
+  const initialCardCount = await page.evaluate(() => {
+    return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
+  });
 
-  while (scrollAttempts < maxScrollAttempts && stableCount < maxStableCount) {
-    previousHeight = currentHeight;
+  console.error(`📊 Initial card count: ${initialCardCount}`);
 
-    // 检查当前页面的评论卡片数量
-    const currentCardCount = await page.evaluate(() => {
-      return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
-    });
+  // Single scroll to bottom to trigger any lazy loading
+  console.error('📜 Scrolling to bottom to trigger lazy loading...');
+  await page.evaluate(() => {
+    window.scrollTo(0, document.body.scrollHeight);
+  });
 
-    // 人类化滚动 - 分多次小幅度滚动
-    for (let i = 0; i < 3; i++) {
-      await humanScroll(page, getRandomDelay(200, 400), 'down');
-      await page.waitForTimeout(getRandomDelay(800, 1500));
-    }
+  // Wait for potential lazy loading
+  await page.waitForTimeout(getRandomDelay(2000, 3000));
 
-    // 滚动到页面底部确保触发懒加载
-    await page.evaluate(() => {
-      window.scrollTo(0, document.body.scrollHeight);
-    });
-
-    // 等待内容加载
-    await page.waitForTimeout(getRandomDelay(2000, 4000));
-
-    // 检查高度变化
-    currentHeight = await page.evaluate(() => document.body.scrollHeight);
-
-    // 检查新的评论卡片数量
-    const newCardCount = await page.evaluate(() => {
-      return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
-    });
-
-    scrollAttempts++;
-
-    if (currentHeight === previousHeight && newCardCount === currentCardCount) {
-      stableCount++;
-      console.error(
-        `📜 滚动尝试 ${scrollAttempts}: 高度稳定 ${currentHeight}px, 卡片数量: ${newCardCount}, 稳定次数: ${stableCount}/${maxStableCount}`
-      );
-    } else {
-      stableCount = 0; // 重置稳定计数
-      console.error(
-        `📜 滚动尝试 ${scrollAttempts}: 高度 ${previousHeight}px → ${currentHeight}px, 卡片数量: ${currentCardCount} → ${newCardCount}`
-      );
-    }
-
-    // 如果连续多次没有新内容，尝试更激进的滚动
-    if (stableCount >= 2) {
-      console.error('🚀 尝试激进滚动以加载更多内容...');
-      // 快速滚动到顶部再到底部
-      await page.evaluate(() => {
-        window.scrollTo(0, 0);
-      });
-      await page.waitForTimeout(1000);
-      await page.evaluate(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-      });
-      await page.waitForTimeout(3000);
-    }
-  }
-
+  // Check if more content was loaded
   const finalCardCount = await page.evaluate(() => {
     return document.querySelectorAll('.sj-masonry-item .sj-text-card').length;
   });
 
-  console.error(
-    `✅ 滚动完成! 总尝试次数: ${scrollAttempts}, 最终高度: ${currentHeight}px, 总评论卡片: ${finalCardCount}`
-  );
+  console.error(`📊 Final card count: ${finalCardCount}`);
+
+  if (finalCardCount > initialCardCount) {
+    console.error(`✅ Loaded ${finalCardCount - initialCardCount} additional reviews`);
+  } else {
+    console.error(`✅ All content was already loaded`);
+  }
+
+  return finalCardCount;
 }
 
-// ==================== 主逻辑 - 参考Amazon脚本模式 ====================
+// ==================== Main Logic ====================
 
 try {
-  console.error('🌐 开始导航，使用人类化行为...');
+  console.error('🌐 Starting navigation with human-like behavior...');
 
-  // 设置额外的HTTP头
+  // Set additional HTTP headers
   await page.setExtraHTTPHeaders({
     'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
   });
 
-  // 导航到页面 - 使用更宽松的等待条件
+  // Navigate to page with relaxed waiting conditions
   await page.goto(TARGET_URL, {
-    waitUntil: 'domcontentloaded', // 更快的加载条件
+    waitUntil: 'domcontentloaded', // Faster loading condition
     timeout: 30000,
   });
 
-  // 随机初始等待
+  // Random initial wait
   await page.waitForTimeout(getRandomDelay(1500, 3000));
 
-  console.error('✅ 页面加载完成');
+  console.error('✅ Page loaded successfully');
 
-  // 获取页面基本信息
+  // Get basic page information
   const pageTitle = await page.title();
   const currentUrl = page.url();
-  console.error(`📄 页面标题: ${pageTitle}`);
-  console.error(`🌐 当前URL: ${currentUrl}`);
+  console.error(`📄 Page title: ${pageTitle}`);
+  console.error(`🌐 Current URL: ${currentUrl}`);
 
-  // 模拟初始鼠标移动
+  // Simulate initial mouse movement
   await simulateMouseMovement(
     page,
     Math.random() * 100,
     Math.random() * 100,
     Math.random() * 800 + 100,
-    Math.random() * 400 + 100
+    Math.random() * 400 + 100,
   );
 
-  // 小幅度初始滚动，模拟人类行为
+  // Small initial scroll to simulate human behavior
   await humanScroll(page, getRandomDelay(100, 300), 'down');
   await page.waitForTimeout(getRandomDelay(500, 1000));
 
-  // 等待主要内容容器，但不要太严格
-  console.error('🔍 等待页面内容...');
+  // Wait for main content container, but not too strict
+  console.error('🔍 Waiting for page content...');
   try {
     await page.waitForSelector('.sj-wol-testimonials, .sj-masonry, .sj-card-wall', {
       timeout: 15000,
     });
-    console.error('✅ 找到主要内容容器');
+    console.error('✅ Found main content container');
   } catch (error) {
-    console.error('⚠️ 主容器等待超时，尝试继续...');
+    console.error('⚠️ Main container wait timeout, trying to continue...');
   }
 
-  // 等待页面稳定
+  // Wait for page stability
   await page.waitForTimeout(2000);
 
-  // 检查页面结构
+  // Check page structure
   const pageStructure = await page.evaluate(() => {
     return {
       hasWolTestimonials: !!document.querySelector('.sj-wol-testimonials'),
@@ -190,42 +147,32 @@ try {
     };
   });
 
-  console.error('📊 页面结构:', JSON.stringify(pageStructure, null, 2));
+  console.error('📊 Page structure:', JSON.stringify(pageStructure, null, 2));
 
-  // 滚动加载更多内容
-  if (SCROLL_TO_LOAD && pageStructure.hasWolTestimonials) {
-    console.error('🔄 开始滚动加载更多评论...');
-    await autoScrollToLoadContent(page);
-
-    // 滚动后再次检查
-    const updatedStructure = await page.evaluate(() => {
-      return {
-        totalCards: document.querySelectorAll('.sj-masonry-item .sj-text-card').length,
-        totalMasonryItems: document.querySelectorAll('.sj-masonry-item').length,
-      };
-    });
-    console.error('📊 滚动后结构:', JSON.stringify(updatedStructure, null, 2));
+  // Simplified content loading
+  if (pageStructure.hasWolTestimonials) {
+    await ensureAllContentLoaded(page);
   }
 
-  // 等待内容稳定
+  // Wait for content stability
   await page.waitForTimeout(WAIT_FOR_LOAD);
 
-  // 提取评论数据
-  console.error('📤 开始提取评论数据...');
+  // Extract review data
+  console.error('📤 Starting review data extraction...');
   const testimonials = await page.evaluate((maxTestimonials) => {
     const cards = document.querySelectorAll('.sj-masonry-item .sj-text-card');
     const results = [];
 
-    // 如果maxTestimonials很大，就提取所有卡片
+    // If maxTestimonials is very large, extract all cards
     const targetCount =
       maxTestimonials >= 999999 ? cards.length : Math.min(cards.length, maxTestimonials);
-    console.log(`找到 ${cards.length} 个评论卡片，准备提取 ${targetCount} 个`);
+    console.log(`Found ${cards.length} review cards, preparing to extract ${targetCount}`);
 
     for (let i = 0; i < targetCount; i++) {
       const card = cards[i];
 
       try {
-        // 提取评论文本 - 尝试多个选择器
+        // Extract review text - try multiple selectors
         let content = '';
         const contentSelectors = [
           '.sj-content div div',
@@ -242,16 +189,16 @@ try {
           }
         }
 
-        // 提取作者信息
+        // Extract author information
         const authorEl = card.querySelector('.sj-endorser-name');
         const author = authorEl ? authorEl.textContent.trim() : '';
 
-        // 提取头像
+        // Extract avatar
         const avatarEl = card.querySelector('.sj-avatar-container img, img[src*="avatar"]');
         const avatar = avatarEl ? avatarEl.src : '';
         const avatarAlt = avatarEl ? avatarEl.alt : '';
 
-        // 提取评分
+        // Extract rating
         const ratingEl = card.querySelector('.sj-star-rating, [class*="rating"], [class*="star"]');
         let rating = null;
         if (ratingEl) {
@@ -259,30 +206,30 @@ try {
           if (filledStars > 0) rating = filledStars;
         }
 
-        // 提取日期
+        // Extract date
         const dateEl = card.querySelector(
-          '.sj-card-details div[style*="opacity"], [class*="date"], time'
+          '.sj-card-details div[style*="opacity"], [class*="date"], time',
         );
         const date = dateEl ? dateEl.textContent.trim() : '';
 
-        // 提取职位/描述
+        // Extract title/description
         let title = '';
         const endorserContainer = card.querySelector('.sj-endorser-view-container');
         if (endorserContainer) {
           const titleEl = endorserContainer.querySelector(
-            'div:not(.sj-endorser-name):not(.sj-avatar-container)'
+            'div:not(.sj-endorser-name):not(.sj-avatar-container)',
           );
           if (titleEl && titleEl.textContent.trim() !== author) {
             title = titleEl.textContent.trim();
           }
         }
 
-        // 检查是否有附加图片
+        // Check for attached images
         const attachmentEl = card.querySelector('.sj-attachment-container img, .sj-media');
         const attachment = attachmentEl ? attachmentEl.src : '';
 
         if (content || author) {
-          // 只要有内容或作者就保存
+          // Save as long as there's content or author
           results.push({
             id: `testimonial_${i + 1}`,
             content: content,
@@ -297,27 +244,27 @@ try {
             extractedAt: new Date().toISOString(),
           });
 
-          console.log(`✅ 提取第 ${i + 1} 条: ${author} - ${content.substring(0, 30)}...`);
+          console.log(`✅ Extracted #${i + 1}: ${author} - ${content.substring(0, 30)}...`);
         } else {
-          console.log(`⚠️ 第 ${i + 1} 条评论无有效内容，跳过`);
+          console.log(`⚠️ Review #${i + 1} has no valid content, skipping`);
         }
       } catch (error) {
-        console.error(`❌ 提取第 ${i + 1} 条评论时出错:`, error);
+        console.error(`❌ Error extracting review #${i + 1}:`, error);
       }
     }
 
-    console.log(`🎯 成功提取 ${results.length} 条评论`);
+    console.log(`🎯 Successfully extracted ${results.length} reviews`);
     return results;
   }, MAX_TESTIMONIALS);
 
-  console.error(`✅ 提取完成，获得 ${testimonials.length} 条评论`);
+  console.error(`✅ Extraction complete, obtained ${testimonials.length} reviews`);
 
-  // 检测JSON大小
+  // Check JSON size
   const testimonialsJson = JSON.stringify(testimonials);
   const jsonSizeKB = Math.round(testimonialsJson.length / 1024);
-  console.error(`📏 评论数据大小: ${jsonSizeKB}KB`);
+  console.error(`📏 Review data size: ${jsonSizeKB}KB`);
 
-  // 生成摘要统计
+  // Generate summary statistics
   const summary = {
     totalCount: testimonials.length,
     withContent: testimonials.filter((t) => t.content && t.content.trim()).length,
@@ -328,17 +275,17 @@ try {
     withAttachment: testimonials.filter((t) => t.attachment).length,
   };
 
-  console.error(`📊 === 数据摘要 ===`);
-  console.error(`📝 总评论数: ${summary.totalCount}`);
-  console.error(`✍️ 有内容: ${summary.withContent}`);
-  console.error(`👤 有作者: ${summary.withAuthor}`);
-  console.error(`⭐ 有评分: ${summary.withRating}`);
-  console.error(`📅 有日期: ${summary.withDate}`);
-  console.error(`🖼️ 有头像: ${summary.withAvatar}`);
-  console.error(`📎 有附件: ${summary.withAttachment}`);
+  console.error(`📊 === Data Summary ===`);
+  console.error(`📝 Total reviews: ${summary.totalCount}`);
+  console.error(`✍️ With content: ${summary.withContent}`);
+  console.error(`👤 With author: ${summary.withAuthor}`);
+  console.error(`⭐ With rating: ${summary.withRating}`);
+  console.error(`📅 With date: ${summary.withDate}`);
+  console.error(`🖼️ With avatar: ${summary.withAvatar}`);
+  console.error(`📎 With attachment: ${summary.withAttachment}`);
   console.error(`==================`);
 
-  // 构建结果对象
+  // Build result object
   const result = {
     success: true,
     url: TARGET_URL,
@@ -363,15 +310,15 @@ try {
     });
 
     result.metadata = metadata;
-    console.error('📊 元数据提取完成');
+    console.error('📊 Metadata extraction complete');
   }
 
-  console.error('🎉 所有任务完成!');
+  console.error('🎉 All tasks completed!');
   return result;
 } catch (error) {
-  console.error('❌ 提取过程中发生错误:', error.message);
+  console.error('❌ Error occurred during extraction:', error.message);
 
-  // 获取调试信息
+  // Get debug information
   try {
     const debugInfo = await page.evaluate(() => {
       return {
@@ -382,9 +329,9 @@ try {
         hasTestimonialContainer: !!document.querySelector('.sj-wol-testimonials'),
       };
     });
-    console.error('🐛 调试信息:', JSON.stringify(debugInfo, null, 2));
+    console.error('🐛 Debug info:', JSON.stringify(debugInfo, null, 2));
   } catch (debugError) {
-    console.error('⚠️ 无法获取调试信息');
+    console.error('⚠️ Cannot get debug information');
   }
 
   return {
