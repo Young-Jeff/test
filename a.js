@@ -258,31 +258,20 @@ try {
                 imgSrc = 'https://senja.io/' + imgSrc.replace(/^\.\//, '');
               }
 
-              // Validate that it's a real image URL (strict validation)
-              const isValidAttachment =
-                imgSrc.includes('cdn.senja.io/public/media/') || // Senja CDN media
-                imgSrc.includes('Screenshot') || // Screenshot attachments
-                (imgSrc.includes('imagekit.io') && !imgSrc.includes('avatar')) || // ImageKit images (not avatars)
-                /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(imgSrc); // Valid image file extensions
-
-              // Exclude page URLs and invalid patterns
+              // More permissive validation - exclude obvious non-images but allow most URLs
               const isPageUrl =
-                imgSrc.includes('/p/') || // Senja page URLs like /p/empathia/FPhVcvz
-                imgSrc.endsWith('/') || // Directory URLs
-                !imgSrc.includes('.'); // URLs without file extensions
+                (imgSrc.includes('/p/') && !imgSrc.includes('/public/media/')) || // Page URLs like /p/empathia/FPhVcvz
+                imgSrc === TARGET_URL || // Exact match of the page URL
+                imgSrc.endsWith('/'); // Directory URLs
 
-              const finalValidation = isValidAttachment && !isPageUrl;
+              const finalValidation = imgSrc && !isPageUrl;
 
               // Avoid duplicates and ensure it's a valid attachment
               if (imgSrc && finalValidation && !attachmentImages.includes(imgSrc)) {
                 attachmentImages.push(imgSrc);
                 console.log(`✅ Found attachment: ${imgSrc}`);
               } else if (imgSrc && !finalValidation) {
-                if (isPageUrl) {
-                  console.log(`🚫 Skipped page URL: ${imgSrc}`);
-                } else {
-                  console.log(`⚠️ Skipped non-attachment image: ${imgSrc}`);
-                }
+                console.log(`🚫 Skipped page URL: ${imgSrc}`);
               }
             }
           });
