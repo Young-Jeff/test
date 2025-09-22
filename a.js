@@ -225,8 +225,70 @@ try {
         }
 
         // Check for attached images
-        const attachmentEl = card.querySelector('.sj-attachment-container img, .sj-media');
-        const attachment = attachmentEl ? attachmentEl.src : '';
+        const attachmentImages = [];
+
+        // Precise selectors based on actual Senja.io HTML structure
+        const attachmentSelectors = [
+          '.sj-attachment-container img.sj-media', // Primary: attachment images
+          '.sj-attachment-container img', // Backup: any img in attachment container
+          'img.sj-media', // Direct: sj-media class images
+          'img[src*="cdn.senja.io/public/media/"]', // Senja CDN media URLs
+          '.sj-content img', // Images within content
+          'img[src*="Screenshot"]', // Screenshot pattern (common in testimonials)
+        ];
+
+        // Find all potential attachment images
+        for (const selector of attachmentSelectors) {
+          const images = card.querySelectorAll(selector);
+          images.forEach((img) => {
+            let imgSrc = img.src || img.getAttribute('data-src') || img.getAttribute('src');
+
+            // Handle and validate image URLs
+            if (imgSrc) {
+              // Fix URLs that start with @ symbol
+              if (imgSrc.startsWith('@')) {
+                imgSrc = imgSrc.substring(1);
+              }
+
+              // Convert relative URLs to absolute URLs
+              if (imgSrc.startsWith('/')) {
+                imgSrc = 'https://senja.io' + imgSrc;
+              } else if (!imgSrc.startsWith('http')) {
+                // Handle other relative URL formats
+                imgSrc = 'https://senja.io/' + imgSrc.replace(/^\.\//, '');
+              }
+
+              // Validate that it's a real image URL (strict validation)
+              const isValidAttachment =
+                imgSrc.includes('cdn.senja.io/public/media/') || // Senja CDN media
+                imgSrc.includes('Screenshot') || // Screenshot attachments
+                (imgSrc.includes('imagekit.io') && !imgSrc.includes('avatar')) || // ImageKit images (not avatars)
+                /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(imgSrc); // Valid image file extensions
+
+              // Exclude page URLs and invalid patterns
+              const isPageUrl =
+                imgSrc.includes('/p/') || // Senja page URLs like /p/empathia/FPhVcvz
+                imgSrc.endsWith('/') || // Directory URLs
+                !imgSrc.includes('.'); // URLs without file extensions
+
+              const finalValidation = isValidAttachment && !isPageUrl;
+
+              // Avoid duplicates and ensure it's a valid attachment
+              if (imgSrc && finalValidation && !attachmentImages.includes(imgSrc)) {
+                attachmentImages.push(imgSrc);
+                console.log(`✅ Found attachment: ${imgSrc}`);
+              } else if (imgSrc && !finalValidation) {
+                if (isPageUrl) {
+                  console.log(`🚫 Skipped page URL: ${imgSrc}`);
+                } else {
+                  console.log(`⚠️ Skipped non-attachment image: ${imgSrc}`);
+                }
+              }
+            }
+          });
+        }
+
+        const attachment = attachmentImages.length > 0 ? attachmentImages : [];
 
         if (content || author) {
           // Save as long as there's content or author
@@ -272,7 +334,11 @@ try {
     withRating: testimonials.filter((t) => t.rating).length,
     withDate: testimonials.filter((t) => t.date).length,
     withAvatar: testimonials.filter((t) => t.avatar).length,
-    withAttachment: testimonials.filter((t) => t.attachment).length,
+    withAttachment: testimonials.filter((t) => t.attachment && t.attachment.length > 0).length,
+    totalAttachments: testimonials.reduce(
+      (sum, t) => sum + (t.attachment ? t.attachment.length : 0),
+      0,
+    ),
   };
 
   console.error(`📊 === Data Summary ===`);
@@ -283,6 +349,7 @@ try {
   console.error(`📅 With date: ${summary.withDate}`);
   console.error(`🖼️ With avatar: ${summary.withAvatar}`);
   console.error(`📎 With attachment: ${summary.withAttachment}`);
+  console.error(`🖼️ Total attachments: ${summary.totalAttachments}`);
   console.error(`==================`);
 
   // Build result object
