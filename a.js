@@ -349,8 +349,15 @@ try {
 
   if (INCLUDE_METADATA) {
     const metadata = await page.evaluate(() => {
+      // Extract page title and subtitle from Senja wall of love header
+      const pageTitle =
+        document.querySelector('.sj-wol-title')?.textContent?.trim() || document.title;
+      const pageSubtitle = document.querySelector('.sj-wol-subtitle')?.textContent?.trim() || '';
+
       return {
         title: document.title,
+        pageTitle: pageTitle, // Main title from Senja header
+        subtitle: pageSubtitle, // Subtitle from Senja header
         description: document.querySelector('meta[name="description"]')?.content || '',
         pageHeight: document.body.scrollHeight,
         totalCards: document.querySelectorAll('.sj-masonry-item .sj-text-card').length,
