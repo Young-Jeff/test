@@ -224,7 +224,7 @@ try {
           }
         }
 
-        // Check for attached images
+        // Check for attached images with comprehensive selectors and URL validation
         const attachmentImages = [];
 
         // Precise selectors based on actual Senja.io HTML structure
@@ -288,7 +288,7 @@ try {
           });
         }
 
-        const attachment = attachmentImages.length > 0 ? attachmentImages : [];
+        const attachment = attachmentImages.length > 0 ? attachmentImages[0] : ''; // Take first image as string
 
         if (content || author) {
           // Save as long as there's content or author
@@ -334,11 +334,7 @@ try {
     withRating: testimonials.filter((t) => t.rating).length,
     withDate: testimonials.filter((t) => t.date).length,
     withAvatar: testimonials.filter((t) => t.avatar).length,
-    withAttachment: testimonials.filter((t) => t.attachment && t.attachment.length > 0).length,
-    totalAttachments: testimonials.reduce(
-      (sum, t) => sum + (t.attachment ? t.attachment.length : 0),
-      0,
-    ),
+    withAttachment: testimonials.filter((t) => t.attachment && t.attachment.trim()).length,
   };
 
   console.error(`📊 === Data Summary ===`);
@@ -349,7 +345,6 @@ try {
   console.error(`📅 With date: ${summary.withDate}`);
   console.error(`🖼️ With avatar: ${summary.withAvatar}`);
   console.error(`📎 With attachment: ${summary.withAttachment}`);
-  console.error(`🖼️ Total attachments: ${summary.totalAttachments}`);
   console.error(`==================`);
 
   // Build result object
