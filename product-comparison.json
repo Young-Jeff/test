@@ -1,0 +1,73 @@
+{
+  "userInputs": [
+    {
+      "id": "product1-url",
+      "type": "input",
+      "name": "Product 1 URL",
+      "description": "Enter the URL of the first product to compare",
+      "placeholder": "https://example.com/product1",
+      "required": true
+    },
+    {
+      "id": "product2-url",
+      "type": "input",
+      "name": "Product 2 URL",
+      "description": "Enter the URL of the second product to compare",
+      "placeholder": "https://example.com/product2",
+      "required": true
+    }
+  ],
+  "workflows": [
+    {
+      "id": "today-date",
+      "nameV2": "Today",
+      "type": "python_script",
+      "outputFormat": "text",
+      "script": "# Python script for workflow task\n# Available global variables:\n# - data: dict containing results from previous nodes\n#   - data[\"nodeId\"] contains the output from a specific node\nfrom datetime import date\ndef main():\n    # Get today's date as a date object\n    today = date.today()\n\n    # Format the date as YYYY-MM-DD\n    formatted_date = today.strftime(\"%Y-%m-%d\")\n    \n    return formatted_date\n\n# Execute the main function and print the result\nif __name__ == \"__main__\":\n    output = main()\n    print(output)\n",
+      "nodeIds": []
+    },
+    {
+      "id": "fetch-product1",
+      "nameV2": "Fetch Product 1 Info",
+      "type": "fetch_url",
+      "outputFormat": "text",
+      "prompt": "@[Question-1 Product 1 URL](product1-url)"
+    },
+    {
+      "id": "fetch-product2",
+      "nameV2": "Fetch Product 2 Info",
+      "type": "fetch_url",
+      "outputFormat": "text",
+      "prompt": "@[Question-2 Product 2 URL](product2-url)"
+    },
+    {
+      "id": "generate-comparison",
+      "nameV2": "Generate Comparison Report",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "Input:\nTODAY = @[Step-1 Today](today-date)\nPRODUCT1_URL = @[Question-1 Product 1 URL](product1-url)\nPRODUCT2_URL = @[Question-2 Product 2 URL](product2-url)\nPRODUCT1_INFO = @[Step-2 Fetch Product 1 Info](fetch-product1)\nPRODUCT2_INFO = @[Step-3 Fetch Product 2 Info](fetch-product2)\n\nInstruction:\nYou are an expert product comparison writer creating a comprehensive comparison article.\n\nUse today's date (TODAY) for the updated timestamp.\nDo not perform any online search.\nUse only the information provided in PRODUCT1_INFO and PRODUCT2_INFO.\nExtract product names from URLs or content: PRODUCT1_NAME and PRODUCT2_NAME.\n\nGenerate a detailed comparison article in markdown format with the following structure:\n\n# [PRODUCT1_NAME] vs [PRODUCT2_NAME]: Which [CATEGORY] Delivers [BENEFIT] in [YEAR]?\n\n_Updated on [TODAY]_ · [READ_TIME] min · [AUTHOR_NAME]\n\n## Introduction\nProvide context about why this comparison matters. Explain the category, market trends, and why readers should care about choosing between these two products. Include relevant statistics or industry insights if available from the product information.\n\n## Quick Take: Key Differences at a Glance\n\nScan the essentials before you dive deeper:\n\n| Feature | [PRODUCT1_NAME] | [PRODUCT2_NAME] |\n|---------|-----------------|-----------------|\n| Data Collection | [Description] | [Description] |\n| Engine Coverage | [Description] | [Description] |\n| Integrations | [Description] | [Description] |\n| Security | [Description] | [Description] |\n| Ideal Company Size | [Description] | [Description] |\n| Pricing | [Description] | [Description] |\n| Primary Focus | [Description] | [Description] |\n\n## [PRODUCT1_NAME]: Detailed Analysis\n\n**Summary:** [2-3 sentence overview of the product]\n\n**Key Features:**\n- [Feature 1]\n- [Feature 2]\n- [Feature 3]\n\n**Strengths:**\n- [Strength 1]\n- [Strength 2]\n\n**Weaknesses:**\n- [Weakness 1]\n- [Weakness 2]\n\n**Ideal For:** [Target audience and use cases]\n\n## [PRODUCT2_NAME]: Detailed Analysis\n\n**Summary:** [2-3 sentence overview of the product]\n\n**Key Features:**\n- [Feature 1]\n- [Feature 2]\n- [Feature 3]\n\n**Strengths:**\n- [Strength 1]\n- [Strength 2]\n\n**Weaknesses:**\n- [Weakness 1]\n- [Weakness 2]\n\n**Ideal For:** [Target audience and use cases]\n\n## Data Collection Approach\n\nExplain how each product collects and processes data. Compare their methodologies, accuracy, and real-world applicability. Highlight any technical differences that impact data quality or insights.\n\n## Recommendation\n\n**Choose [PRODUCT_NAME] for [REASON].**\n\n[Detailed explanation of why this product is recommended, including specific use cases, company sizes, and scenarios where it excels. Also mention when the alternative might be better.]\n\n## Questions to Ask During a Demo\n\n1. How do you source [specific data point] versus [alternative method]?\n2. Which [specific features] are sampled [frequency] and how frequently?\n3. How is [specific metric] scored and validated for accuracy?\n4. What security audits have been completed and certified?\n5. How are false positives identified and handled?\n6. What onboarding resources and support come standard?\n\n## Measuring Success and ROI\n\n**Primary KPIs:**\n- [KPI 1]: [Description and formula]\n- [KPI 2]: [Description and formula]\n- [KPI 3]: [Description and formula]\n- [KPI 4]: [Description and formula]\n\n**Timeline Expectations:**\n- [Timeframe 1]: [What to expect]\n- [Timeframe 2]: [What to expect]\n\n## Frequently Asked Questions\n\n### How long does it take to see measurable results?\n\n[Answer based on product information and typical implementation timelines]\n\n### What datasets power each platform's insights?\n\n[PRODUCT1_NAME] [description of data sources].\n\n[PRODUCT2_NAME] [description of data sources].\n\n### How do pricing models compare?\n\n[PRODUCT1_NAME] [pricing information if available].\n\n[PRODUCT2_NAME] [pricing information if available].\n\n### Which platform supports regulated industries?\n\n[Answer about compliance, certifications, and industry-specific features]\n\n## The Verdict\n\n**Choose [PRODUCT_NAME] for [COMPREHENSIVE REASON].**\n\n[Final summary paragraph that reinforces the recommendation, highlights key differentiators, and provides actionable next steps for readers.]\n\n---\n\n**Important Guidelines:**\n- Use only information from PRODUCT1_INFO and PRODUCT2_INFO\n- Do not invent features, pricing, or capabilities\n- If information is missing, state \"Information not available\" rather than making assumptions\n- Maintain an objective, editorial tone\n- Focus on helping readers make informed decisions\n- Include specific, actionable insights\n- Optimize for SEO and AEO with natural keyword density\n- All output must be pure markdown (no HTML, no explanations, no meta text)"
+    }
+  ],
+  "results": [
+    {
+      "type": "plain_text",
+      "fields": [],
+      "items": { "content": "generate-comparison" }
+    },
+    {
+      "type": "html",
+      "fields": ["content"],
+      "items": { "content": "generate-comparison" },
+      "metadata": { "templateId": "product-comparison-template" }
+    }
+  ],
+  "inputValues": {
+    "product1-url": [""],
+    "product2-url": [""]
+  },
+  "version": "1.0",
+  "metadata": { "author": "System", "createdAt": "2025-11-26T00:00:00.000Z" },
+  "frequency": "-1",
+  "mcpConfigs": {},
+  "workflowConnects": []
+}
