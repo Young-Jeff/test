@@ -24,7 +24,7 @@
       "type": "script",
       "outputFormat": "text",
       "script": "module.exports = async function() {\n  // Extract content ID from URL\n  const url = data['content-url-input'] || '';\n  \n  if (!url) {\n    throw new Error('Content URL is required');\n  }\n  \n  // Extract content ID from URL pattern: https://domain.com/content/article-title-content-id\n  // The content ID is the last segment after the last dash\n  const urlParts = url.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  \n  // Extract content ID (usually the last segment after the last dash)\n  const segments = lastPart.split('-');\n  const contentId = segments[segments.length - 1];\n  \n  if (!contentId || contentId.length < 10) {\n    throw new Error(`Invalid content ID extracted from URL: ${contentId}`);\n  }\n  \n  console.log(`Extracted content ID: ${contentId}`);\n  return contentId;\n};",
-      "nodeIds": []
+      "nodeIds": ["content-url-input"]
     },
     {
       "id": "prepare-translation",
@@ -32,7 +32,7 @@
       "type": "script",
       "outputFormat": "text",
       "script": "module.exports = async function() {\n  const contentId = data['extract-content-id'] || '';\n  const targetLanguage = data['target-language-input'] || 'zh';\n  \n  if (!contentId) {\n    throw new Error('Content ID is required');\n  }\n  \n  console.log(`Preparing translation for content ID: ${contentId}, target language: ${targetLanguage}`);\n  \n  // Call prepare-translate API\n  const response = await api.frevanaApi.request(\n    'POST',\n    `/s3/content/${contentId}/prepare-translate`,\n    {\n      target_language: targetLanguage\n    }\n  );\n  \n  if (!response.ok) {\n    throw new Error(`Failed to prepare translation: ${JSON.stringify(response.data)}`);\n  }\n  \n  const result = response.data;\n  console.log(`Translation prepared successfully. New content ID: ${result.new_content_id}`);\n  \n  // Return JSON string with all necessary data\n  return JSON.stringify({\n    contentId: contentId,\n    newContentId: result.new_content_id,\n    contentGroupId: result.content_group_id,\n    downloadUrl: result.download_url,\n    uploadUrl: result.upload_url,\n    targetLanguage: targetLanguage,\n    originalLanguage: result.original_language,\n    expiresAt: result.expires_at\n  });\n};",
-      "nodeIds": ["extract-content-id"]
+      "nodeIds": ["extract-content-id", "target-language-input"]
     },
     {
       "id": "download-original-content",
