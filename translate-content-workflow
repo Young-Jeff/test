@@ -47,7 +47,7 @@
       "nameV2": "Translate Content",
       "type": "ai_prompt",
       "outputFormat": "text",
-      "prompt": "You are a professional translator. Translate the following HTML content.\n\nIMPORTANT:\n1. Preserve all HTML tags, attributes, and structure exactly as they are\n2. Only translate text content within HTML tags, not the tags themselves\n3. Preserve all URLs, links, and image sources unchanged\n4. Maintain the same formatting and structure\n5. Translate all visible text content accurately\n\nFirst, extract the HTML content from this JSON data (look for the 'originalHtml' field):\n@[Step-3 Download Original Content](download-original-content)\n\nThen translate the HTML content from the original language to the target language specified in the JSON. Return ONLY the translated HTML content, without any JSON wrapper, explanations, or additional text.",
+      "prompt": "You are a professional translator. Translate the following HTML content.\n\nIMPORTANT:\n1. Preserve all HTML tags, attributes, and structure exactly as they are\n2. Only translate text content within HTML tags, not the tags themselves\n3. Preserve all URLs, links, and image sources unchanged\n4. Maintain the same formatting and structure\n5. Translate all visible text content accurately\n6. Translate the content inside <title> tags as well\n7. Translate all text content including headings, paragraphs, lists, and any other text elements\n\nFirst, extract the HTML content from this JSON data (look for the 'originalHtml' field):\n@[Step-3 Download Original Content](download-original-content)\n\nThen translate the HTML content from the original language to the target language specified in the JSON. Make sure to translate:\n- The <title> tag content\n- All headings (<h1>, <h2>, <h3>, etc.)\n- All paragraph text\n- All list items\n- All other visible text content\n\nReturn ONLY the translated HTML content, without any JSON wrapper, explanations, or additional text.",
       "model": "gpt-5.1",
       "nodeIds": ["download-original-content"]
     },
@@ -64,14 +64,14 @@
       "nameV2": "Confirm Translation",
       "type": "script",
       "outputFormat": "text",
-      "script": "module.exports = async function() {\n  const uploadResult = JSON.parse(data['upload-translated-content'] || '{}');\n  const newContentId = uploadResult.newContentId;\n  \n  if (!newContentId) {\n    throw new Error('New content ID not found');\n  }\n  \n  console.log(`Confirming translation for new content ID: ${newContentId}`);\n  \n  // Extract title from HTML if possible (optional)\n  const translatedHtml = uploadResult.translatedHtml || '';\n  let title = 'Translated Content';\n  \n  try {\n    const titleMatch = translatedHtml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n    if (titleMatch && titleMatch[1]) {\n      title = titleMatch[1].trim();\n    }\n  } catch (e) {\n    console.log('Could not extract title from HTML');\n  }\n  \n  // Call confirm-translate API\n  const response = await api.frevanaApi.request(\n    'POST',\n    '/s3/content/confirm-translate',\n    {\n      new_content_id: newContentId,\n      title: title\n    }\n  );\n  \n  if (!response.ok) {\n    throw new Error(`Failed to confirm translation: ${JSON.stringify(response.data)}`);\n  }\n  \n  const result = response.data;\n  console.log(`Translation confirmed successfully. Content URL: ${result.url}`);\n  \n  // Return final result\n  return JSON.stringify({\n    success: true,\n    contentId: result.content_id,\n    contentGroupId: result.content_group_id,\n    url: result.url,\n    targetLanguage: uploadResult.targetLanguage,\n    originalLanguage: uploadResult.originalLanguage\n  }, null, 2);\n};",
+      "script": "module.exports = async function() {\n  const uploadResult = JSON.parse(data['upload-translated-content'] || '{}');\n  const newContentId = uploadResult.newContentId;\n  const translatedHtml = uploadResult.translatedHtml || '';\n  \n  if (!newContentId) {\n    throw new Error('New content ID not found');\n  }\n  \n  if (!translatedHtml) {\n    throw new Error('Translated HTML content is empty');\n  }\n  \n  console.log(`Confirming translation for new content ID: ${newContentId}`);\n  \n  // Extract translated title from HTML\n  let title = 'Translated Content';\n  try {\n    const titleMatch = translatedHtml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n    if (titleMatch && titleMatch[1]) {\n      title = titleMatch[1].trim();\n    }\n  } catch (e) {\n    console.log('Could not extract title from HTML');\n  }\n  \n  // Call confirm-translate API\n  const response = await api.frevanaApi.request(\n    'POST',\n    '/s3/content/confirm-translate',\n    {\n      new_content_id: newContentId,\n      title: title\n    }\n  );\n  \n  if (!response.ok) {\n    throw new Error(`Failed to confirm translation: ${JSON.stringify(response.data)}`);\n  }\n  \n  const result = response.data;\n  console.log(`Translation confirmed successfully. Content URL: ${result.url}`);\n  \n  // Return translated HTML directly instead of JSON\n  return translatedHtml;\n};",
       "nodeIds": ["upload-translated-content"]
     }
   ],
   "results": [
     {
-      "type": "plain_text",
-      "fields": [],
+      "type": "html",
+      "fields": ["content"],
       "items": { "content": "confirm-translation" }
     }
   ],
