@@ -48,7 +48,7 @@
       "type": "ai_prompt",
       "outputFormat": "text",
       "prompt": "You are a professional translator. Translate the following HTML content.\n\nIMPORTANT:\n1. Preserve all HTML tags, attributes, and structure exactly as they are\n2. Only translate text content within HTML tags, not the tags themselves\n3. Preserve all URLs, links, and image sources unchanged\n4. Maintain the same formatting and structure\n5. Translate all visible text content accurately\n\nFirst, extract the HTML content from this JSON data (look for the 'originalHtml' field):\n@[Step-3 Download Original Content](download-original-content)\n\nThen translate the HTML content from the original language to the target language specified in the JSON. Return ONLY the translated HTML content, without any JSON wrapper, explanations, or additional text.",
-      "model": "gpt-4o",
+      "model": "gpt-5.1",
       "nodeIds": ["download-original-content"]
     },
     {
