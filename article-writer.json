@@ -94,14 +94,6 @@
       "type": "ai_prompt",
       "outputFormat": "text",
       "prompt": "You are a professional blog editor. Take the draft blog article below and refine it into a natural, engaging blog post while keeping all the essential information intact.\n\nDraft Blog Article:\n{{  @[Step-5 Blog generator](991f4446-bddc-4825-b1d8-78b8f973095e)  }}\n\nRefinement Guidelines:\n1. Make the tone conversational and relatable, as if written by a lifestyle or fitness blogger.  \n2. Keep the Markdown structure (headings, lists, formatting) but smooth out stiff or report-like phrasing.  \n3. Add storytelling elements, anecdotes, or examples that make the article feel more personal and vivid.  \n4. Replace technical specs or numbers with reader-friendly comparisons or metaphors (unless specs are critical).  \n5. Weave in a sense of personality: rhetorical questions, casual expressions, light humor, or emojis where appropriate.  \n6. Ensure flow between sections feels natural, with smooth transitions rather than abrupt bullet points.  \n7. Preserve SEO keywords, but integrate them subtly so they feel organic.  \n8. Always end with a warm, motivating conclusion and a call-to-action that feels human and encouraging.\n\nOutput:\nReturn only the refined blog article in **Markdown format**, keeping headings and formatting consistent.\n"
-    },
-    {
-      "id": "combine-title-content",
-      "nameV2": "Combine Title and Content",
-      "type": "python_script",
-      "outputFormat": "text",
-      "script": "# Python script to combine title and content for HTML template\n# Available global variables:\n# - data: dict containing results from previous nodes\n\ndef main():\n    # Get the original user input title\n    title = data.get('0af6cbf0-cdfc-4342-9604-9d06cb2f49cc', '').strip()\n    \n    # Get the refined article content\n    content = data.get('6fe851a8-c113-4016-be3e-bcbf2954b6a0', '').strip()\n    \n    # Combine them in a format that the HTML template can parse\n    result = f\"ARTICLE_TITLE: {title}\\n\\nARTICLE_CONTENT:\\n{content}\"\n    \n    return result\n\n# Execute the main function and print the result\nif __name__ == \"__main__\":\n    output = main()\n    print(output)\n",
-      "nodeIds": ["0af6cbf0-cdfc-4342-9604-9d06cb2f49cc", "6fe851a8-c113-4016-be3e-bcbf2954b6a0"]
     }
   ],
   "results": [
@@ -113,22 +105,19 @@
     {
       "type": "html",
       "fields": ["content"],
-      "items": { "content": "combine-title-content" },
+      "items": { "content": "6fe851a8-c113-4016-be3e-bcbf2954b6a0" },
       "metadata": { "templateId": "medium-article-template" }
     }
   ],
   "inputValues": {
     "3ff578c9-eb62-4a12-8004-7d63dab7095a": ["https://www.frevana.com/"],
-    "0af6cbf0-cdfc-4342-9604-9d06cb2f49cc": ["当前热门的Agent工具"],
+    "0af6cbf0-cdfc-4342-9604-9d06cb2f49cc": ["The Hottest AI Agent Tool"],
     "374a16de-7249-4de6-8f6b-93c3d1960bdf": ["AEO"],
     "2fb98121-1f73-460e-b1d0-48356e6c701e": ["AI", "Agent", "AEO"],
     "4847a9c2-1773-4861-8fa0-de739392c24b": []
   },
   "version": "1.0",
-  "metadata": {
-    "author": "",
-    "createdAt": "2025-12-12T04:45:12.399Z"
-  },
+  "metadata": { "author": "Jeff-1", "createdAt": "2025-12-12T08:08:36.691Z" },
   "frequency": "-1",
   "workflowConnects": []
 }
