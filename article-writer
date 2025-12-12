@@ -1,0 +1,126 @@
+{
+  "userInputs": [
+    {
+      "id": "3ff578c9-eb62-4a12-8004-7d63dab7095a",
+      "type": "url",
+      "name": "Your Product URL",
+      "description": "",
+      "placeholder": "https://",
+      "required": true
+    },
+    {
+      "id": "0af6cbf0-cdfc-4342-9604-9d06cb2f49cc",
+      "type": "input",
+      "name": "Blog article title",
+      "description": "",
+      "placeholder": "How This New Productivity App Saves You 10 Hours a Week",
+      "required": true
+    },
+    {
+      "id": "374a16de-7249-4de6-8f6b-93c3d1960bdf",
+      "type": "area",
+      "name": "Intent – What outcome is this article aiming to achieve? ",
+      "description": "",
+      "placeholder": "AEO, Subscription sign-ups, Paid conversions, etc",
+      "required": true
+    },
+    {
+      "id": "2fb98121-1f73-460e-b1d0-48356e6c701e",
+      "type": "keywords",
+      "name": "What are the keywords to cover in the article",
+      "description": "",
+      "placeholder": "",
+      "required": true
+    },
+    {
+      "id": "4847a9c2-1773-4861-8fa0-de739392c24b",
+      "type": "area",
+      "name": "Additional content guide",
+      "description": "",
+      "placeholder": "",
+      "required": false
+    }
+  ],
+  "workflows": [
+    {
+      "id": "554d81cc-ddf8-4987-8f0e-7df3ccd392c4",
+      "nameV2": "Product context",
+      "type": "fetch_web",
+      "outputFormat": "text",
+      "prompt": " @[Question-1 Your Product URL](3ff578c9-eb62-4a12-8004-7d63dab7095a) "
+    },
+    {
+      "id": "f89d60e9-1a8a-4347-ac02-9a5c63e8ec57",
+      "nameV2": "Parse keywords",
+      "type": "python_script",
+      "outputFormat": "text",
+      "script": "# Python script for workflow task\n# Available global variables:\n# - data: dict containing results from previous nodes\n#   - data[\"nodeId\"] contains the output from a specific node\n\ndef main():\n    keywords_str = data.get('2fb98121-1f73-460e-b1d0-48356e6c701e', '').strip()\n    # gym, home gym, gym bench\n\n    keywords = keywords_str.split(\", \")\n    result = '\\n'.join(keywords)\n    return result\n\n# Execute the main function and print the result\nif __name__ == \"__main__\":\n    output = main()\n    print(output)\n",
+      "nodeIds": ["2fb98121-1f73-460e-b1d0-48356e6c701e"]
+    },
+    {
+      "id": "0fef02bd-5744-4f39-8839-0bf904618516",
+      "nameV2": "Researched Keywords",
+      "type": "loop",
+      "outputFormat": "text",
+      "subNodes": [
+        {
+          "id": "89c29f9f-6a59-44b7-94c9-e4f905ae3dc6",
+          "nameV2": "AI Search",
+          "type": "search_gpt",
+          "outputFormat": "text",
+          "prompt": "@[Current item in loop](0fef02bd-5744-4f39-8839-0bf904618516-loop) "
+        }
+      ],
+      "prompt": " @[Step-2 Parse keywords](f89d60e9-1a8a-4347-ac02-9a5c63e8ec57) "
+    },
+    {
+      "id": "7460cfc6-24b2-4f2f-8822-aaa0179ede8a",
+      "nameV2": "Topic expansion",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are an expert blog editor and SEO strategist. Your task is to take the raw user-provided Topic and improve it into a polished, SEO-friendly blog title.  \n\nRaw Topic:  @[Question-2 Blog article title](0af6cbf0-cdfc-4342-9604-9d06cb2f49cc) \nOriginal Keywords:  @[Question-4 What are the keywords to cover in the article](2fb98121-1f73-460e-b1d0-48356e6c701e) \nResearched Keywords: @[Step-3 Researched Keywords](0fef02bd-5744-4f39-8839-0bf904618516) \nBlog Intent:   @[Question-3 Intent – What outcome is this article aiming to achieve? ](374a16de-7249-4de6-8f6b-93c3d1960bdf)?  \n\nGuidelines:\n1. Preserve the meaning of the user’s raw Topic, but make it more engaging and click-worthy.  \n2. Naturally include 1–2 relevant keywords (from Original or Researched Keywords) to improve SEO ranking.  \n3. Align the title with the Blog Intent (e.g., educational, trend-focused, persuasive, tutorial).  \n4. Keep it clear, concise, and under 70 characters so it fits in search results.  \n5. Output 3-5 optimized versions of the Topic:  \n   - **Version A:** SEO-focused but professional  \n   - **Version B:** Conversational and engaging  \n   - **Version C:** Bold/creative, designed for maximum clicks  \n   - ...\n\nOutput:\nReturn only the 3-5 optimized topic titles in Markdown list format.\n"
+    },
+    {
+      "id": "991f4446-bddc-4825-b1d8-78b8f973095e",
+      "nameV2": "Blog generator",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are a skilled blog writer and content strategist. Write a full-length blog article in Markdown format based on the following inputs:\n\nProduct Context (from Product URL extraction):  \n{{ @[Step-1 Product context](554d81cc-ddf8-4987-8f0e-7df3ccd392c4) }}\n\nOptimized Topic Options:    # e.g. 3–5 versions from the Topic Optimizer\n{{ @[Step-4 Topic expansion](7460cfc6-24b2-4f2f-8822-aaa0179ede8a)  }}\n\nBlog Intent: {{ @[Question-3 Intent – What outcome is this article aiming to achieve? ](374a16de-7249-4de6-8f6b-93c3d1960bdf)  }}\n\nOriginal Keywords: {{  @[Question-4 What are the keywords to cover in the article](2fb98121-1f73-460e-b1d0-48356e6c701e)  }}\n\nResearched Keywords: {{ @[Step-3 Researched Keywords](0fef02bd-5744-4f39-8839-0bf904618516) }}\n\nContent Guide: {{ @[Question-5 Additional content guide](4847a9c2-1773-4861-8fa0-de739392c24b)  }}  \n(Note: This field may be empty. If provided, follow the user’s guide closely, but do not break the required Markdown formatting rules.)\n\nWriting Guidelines:\n1. Analyze all the Topic options and choose the strongest perspective to guide the article. You may blend elements of multiple Topics if it strengthens the narrative.  \n2. Write in an engaging blog style — conversational yet professional, with smooth transitions, storytelling elements, and practical insights.  \n3. Use Markdown headings (##, ###) for clear structure.  \n4. Start with a strong **hook in the introduction** that makes readers want to keep reading.  \n5. Include examples, metaphors, or short anecdotes to make abstract ideas relatable.  \n6. Naturally integrate both Original + Researched Keywords for SEO, but never make it feel forced.  \n7. Weave the Product Context into the narrative subtly — highlight relevance without hard-selling.  \n8. Break down the body into scannable sections (Executive Summary, Introduction, Market Insights, Product Relevance, Actionable Tips, Conclusion).  \n9. End with a clear **conclusion and call-to-action** aligned with the Blog Intent.  \n10. Keep the tone aligned with the Content Guide (authoritative, friendly, inspirational, technical, etc.).  \n\nOutput:\nReturn only the final blog article in **Markdown format**, with headings, subheadings, bullet points, and short paragraphs for readability.\nDo not wrap the output in ```markdown code block markers\n",
+      "model": "gpt-5.1"
+    },
+    {
+      "id": "6fe851a8-c113-4016-be3e-bcbf2954b6a0",
+      "nameV2": "Improve writing",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are a professional blog editor. Take the draft blog article below and refine it into a natural, engaging blog post while keeping all the essential information intact.\n\nDraft Blog Article:\n{{  @[Step-5 Blog generator](991f4446-bddc-4825-b1d8-78b8f973095e)  }}\n\nRefinement Guidelines:\n1. Make the tone conversational and relatable, as if written by a lifestyle or fitness blogger.  \n2. Keep the Markdown structure (headings, lists, formatting) but smooth out stiff or report-like phrasing.  \n3. Add storytelling elements, anecdotes, or examples that make the article feel more personal and vivid.  \n4. Replace technical specs or numbers with reader-friendly comparisons or metaphors (unless specs are critical).  \n5. Weave in a sense of personality: rhetorical questions, casual expressions, light humor, or emojis where appropriate.  \n6. Ensure flow between sections feels natural, with smooth transitions rather than abrupt bullet points.  \n7. Preserve SEO keywords, but integrate them subtly so they feel organic.  \n8. Always end with a warm, motivating conclusion and a call-to-action that feels human and encouraging.\n\nOutput:\nReturn only the refined blog article in **Markdown format**, keeping headings and formatting consistent.\n"
+    }
+  ],
+  "results": [
+    {
+      "type": "plain_text",
+      "fields": [],
+      "items": { "content": "6fe851a8-c113-4016-be3e-bcbf2954b6a0" }
+    },
+    {
+      "type": "html",
+      "fields": ["content"],
+      "items": { "content": "6fe851a8-c113-4016-be3e-bcbf2954b6a0" },
+      "metadata": { "templateId": "medium-article-template" }
+    }
+  ],
+  "inputValues": {
+    "3ff578c9-eb62-4a12-8004-7d63dab7095a": ["https://www.frevana.com/"],
+    "0af6cbf0-cdfc-4342-9604-9d06cb2f49cc": ["当前热门的Agent工具"],
+    "374a16de-7249-4de6-8f6b-93c3d1960bdf": ["AEO"],
+    "2fb98121-1f73-460e-b1d0-48356e6c701e": ["AI", "Agent", "AEO"],
+    "4847a9c2-1773-4861-8fa0-de739392c24b": []
+  },
+  "version": "1.0",
+  "metadata": {
+    "author": "黑不溜秋黑不溜秋黑不溜秋黑不溜秋黑不溜秋黑不溜秋黑不溜秋黑不",
+    "createdAt": "2025-12-12T04:45:12.399Z"
+  },
+  "frequency": "-1",
+  "workflowConnects": []
+}
