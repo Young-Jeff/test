@@ -1,0 +1,42 @@
+{
+  "userInputs": [
+    {
+      "id": "test-input",
+      "type": "input",
+      "name": "Test Input",
+      "description": "Enter any text",
+      "placeholder": "test",
+      "required": true
+    }
+  ],
+  "workflows": [
+    {
+      "id": "test-api",
+      "nameV2": "Test API Availability",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const results = [];\n  \n  // Test 1: Check if api exists\n  results.push(`1. api object exists: ${typeof api !== 'undefined'}`);\n  \n  // Test 2: Check if api.frevanaApi exists\n  if (typeof api !== 'undefined') {\n    results.push(`2. api.frevanaApi exists: ${typeof api.frevanaApi !== 'undefined'}`);\n    \n    // Test 3: Check if api.frevanaApi.request exists\n    if (typeof api.frevanaApi !== 'undefined') {\n      results.push(`3. api.frevanaApi.request exists: ${typeof api.frevanaApi.request === 'function'}`);\n    }\n    \n    // Test 4: Check api.fetch\n    results.push(`4. api.fetch exists: ${typeof api.fetch === 'function'}`);\n  }\n  \n  // Test 5: List all available properties on api\n  if (typeof api !== 'undefined') {\n    results.push(`5. Available api properties: ${Object.keys(api).join(', ')}`);\n  }\n  \n  return results.join('\\n');\n};",
+      "nodeIds": ["test-input"]
+    }
+  ],
+  "results": [
+    {
+      "type": "plain_text",
+      "fields": [],
+      "items": { "content": "test-api" }
+    }
+  ],
+  "inputValues": {
+    "test-input": []
+  },
+  "version": "1.0",
+  "metadata": {
+    "author": "Frevana-AI",
+    "createdAt": "2025-12-15T12:00:00.000Z",
+    "description": "Test API availability in workflow scripts"
+  },
+  "frequency": "-1",
+  "mcpConfigs": {},
+  "workflowConnects": []
+}
+
