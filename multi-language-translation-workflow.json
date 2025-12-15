@@ -113,7 +113,7 @@
       "nameV2": "Format Output Report",
       "type": "ai_prompt",
       "outputFormat": "text",
-      "prompt": "Format the translation results into a beautiful markdown report.\n\nTranslation Summary Data:\n@[Step-5 Aggregate Translation Results](aggregate-results)\n\nCreate a markdown report with:\n1. Overall summary (total languages, success rate)\n2. Detailed results for each language:\n   - Language code\n   - Status (New/Existing/Error)\n   - Content URL (if available)\n   - Content ID\n   - Title (if available)\n3. Statistics breakdown\n4. Any errors or warnings\n\nUse proper markdown formatting with headers, bullet points, and tables where appropriate.\nMake it easy to read and professional.",
+      "prompt": "Format the translation results into a beautiful markdown report.\n\nTranslation Summary Data:\n@[Step-5 Aggregate Translation Results](aggregate-results)\n\nCreate a markdown report with:\n1. Overall summary (total languages, success rate)\n2. Detailed results for each language in a table with these columns ONLY:\n   - Language Code\n   - Status (New/Existing/Error)\n   - URL (clickable link if available)\n   \n   DO NOT include Content ID column in the table.\n   \n3. Statistics breakdown\n4. Any errors or warnings\n\nUse proper markdown formatting with headers, bullet points, and tables where appropriate.\nMake it easy to read and professional.",
       "nodeIds": ["aggregate-results"]
     }
   ],
