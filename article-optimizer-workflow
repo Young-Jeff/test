@@ -1,0 +1,109 @@
+{
+  "userInputs": [
+    {
+      "id": "blog-title-input",
+      "type": "input",
+      "name": "Blog article title",
+      "description": "Enter the title for your blog article",
+      "placeholder": "How This New Productivity App Saves You 10 Hours a Week",
+      "required": true
+    },
+    {
+      "id": "keywords-input",
+      "type": "keywords",
+      "name": "What are the keywords to cover in the article",
+      "description": "Enter comma-separated keywords to include in the article",
+      "placeholder": "AI, productivity, automation",
+      "required": true
+    },
+    {
+      "id": "article-content-input",
+      "type": "area",
+      "name": "Original article content",
+      "description": "Paste your existing article content here (plain text format)",
+      "placeholder": "Paste your article content here...",
+      "required": true
+    }
+  ],
+  "workflows": [
+    {
+      "id": "parse-keywords-node",
+      "nameV2": "Parse keywords",
+      "type": "python_script",
+      "outputFormat": "text",
+      "script": "# Python script to parse comma-separated keywords into a list\n# Available global variables:\n# - data: dict containing results from previous nodes\n\ndef main():\n    # Get keywords string from input\n    keywords_str = data.get('keywords-input', '').strip()\n    \n    # Split by comma and create line-separated format\n    keywords = keywords_str.split(\", \")\n    result = '\\n'.join(keywords)\n    return result\n\n# Execute the main function and print the result\nif __name__ == \"__main__\":\n    output = main()\n    print(output)\n",
+      "nodeIds": ["keywords-input"]
+    },
+    {
+      "id": "research-keywords-loop",
+      "nameV2": "Research keywords",
+      "type": "loop",
+      "outputFormat": "text",
+      "subNodes": [
+        {
+          "id": "ai-search-node",
+          "nameV2": "AI Search",
+          "type": "search_gpt",
+          "outputFormat": "text",
+          "prompt": "@[Current item in loop](research-keywords-loop-loop) "
+        }
+      ],
+      "prompt": " @[Step-1 Parse keywords](parse-keywords-node) "
+    },
+    {
+      "id": "topic-expansion-node",
+      "nameV2": "Topic expansion",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are an expert blog editor and SEO strategist. Your task is to take the user-provided article title and improve it into multiple polished, SEO-friendly blog title options.\n\nOriginal Title: @[Question-1 Blog article title](blog-title-input)\nOriginal Keywords: @[Question-2 What are the keywords to cover in the article](keywords-input)\nResearched Keywords: @[Step-2 Research keywords](research-keywords-loop)\n\nGuidelines:\n1. Preserve the core meaning of the original title, but make it more engaging and click-worthy.\n2. Naturally include 1–2 relevant keywords (from Original or Researched Keywords) to improve SEO ranking.\n3. Keep titles clear, concise, and under 70 characters so they fit in search results.\n4. Output 3-5 optimized versions of the title:\n   - **Version A:** SEO-focused but professional\n   - **Version B:** Conversational and engaging\n   - **Version C:** Bold/creative, designed for maximum clicks\n   - (Add more versions if appropriate)\n\nOutput:\nReturn only the 3-5 optimized topic titles in Markdown list format.\n"
+    },
+    {
+      "id": "content-analysis-node",
+      "nameV2": "Analyze original content",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are a content strategist. Analyze the following article and extract key insights:\n\nOriginal Article Content:\n{{ @[Question-3 Original article content](article-content-input) }}\n\nProvide a structured analysis including:\n1. **Main Topic:** What is the central theme?\n2. **Key Points:** List the main arguments or sections\n3. **Tone & Style:** Describe the writing style (professional, casual, technical, etc.)\n4. **Target Audience:** Who is this article written for?\n5. **Strengths:** What works well in this article?\n6. **Areas for Improvement:** What could be enhanced?\n\nOutput:\nReturn your analysis in Markdown format with clear headings.\n"
+    },
+    {
+      "id": "article-optimizer-node",
+      "nameV2": "Optimize article",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are a professional blog editor and SEO specialist. Take the original article and optimize it while maintaining its core message and expertise.\n\nOptimized Title Options:\n{{ @[Step-3 Topic expansion](topic-expansion-node) }}\n\nOriginal Article:\n{{ @[Question-3 Original article content](article-content-input) }}\n\nContent Analysis:\n{{ @[Step-4 Analyze original content](content-analysis-node) }}\n\nTarget Keywords:\nOriginal Keywords: {{ @[Question-2 What are the keywords to cover in the article](keywords-input) }}\nResearched Keywords: {{ @[Step-2 Research keywords](research-keywords-loop) }}\n\nOptimization Guidelines:\n1. **Choose the best title** from the optimized options or create a hybrid version.\n2. **Preserve the author's expertise and credibility** – keep professional insights and personal experience intact.\n3. **Improve structure and readability:**\n   - Use clear Markdown headings (##, ###)\n   - Add bullet points for better scanning\n   - Break long paragraphs into shorter, digestible chunks\n4. **Enhance SEO** by naturally integrating keywords without forcing them.\n5. **Strengthen the introduction** to hook readers immediately.\n6. **Improve transitions** between sections for better flow.\n7. **Keep factual accuracy** – don't change medical, technical, or professional claims.\n8. **Maintain the author's voice** while making the text more engaging.\n9. **Enhance the conclusion** with a clear call-to-action.\n10. **Add subheadings** where appropriate to improve scanability.\n\nOutput:\nReturn only the optimized article in **Markdown format**.\nDo not wrap the output in ```markdown code block markers\n",
+      "model": "gpt-5.1"
+    },
+    {
+      "id": "final-polish-node",
+      "nameV2": "Final polish",
+      "type": "ai_prompt",
+      "outputFormat": "text",
+      "prompt": "You are a senior blog editor. Take the optimized article below and give it a final polish to ensure it's publication-ready.\n\nOptimized Article:\n{{ @[Step-5 Optimize article](article-optimizer-node) }}\n\nFinal Polish Guidelines:\n1. **Check consistency** in tone, style, and formatting throughout.\n2. **Ensure smooth flow** between all sections with natural transitions.\n3. **Verify keyword integration** feels organic and not forced.\n4. **Enhance readability** by varying sentence length and structure.\n5. **Strengthen weak sections** without changing factual content.\n6. **Add personality touches** where appropriate (rhetorical questions, relatable examples).\n7. **Ensure the conclusion** is powerful and includes a clear call-to-action.\n8. **Maintain professional credibility** while making it engaging.\n9. **Check that Markdown formatting** is clean and consistent.\n10. **Preserve all factual information, credentials, and expertise.**\n\nOutput:\nReturn only the final polished article in **Markdown format**.\nDo not wrap the output in ```markdown code block markers\n"
+    }
+  ],
+  "results": [
+    {
+      "type": "plain_text",
+      "fields": [],
+      "items": { "content": "final-polish-node" }
+    },
+    {
+      "type": "html",
+      "fields": ["content"],
+      "items": { "content": "final-polish-node" },
+      "metadata": { "templateId": "medium-article-template" }
+    }
+  ],
+  "inputValues": {
+    "blog-title-input": [],
+    "keywords-input": [],
+    "article-content-input": []
+  },
+  "version": "1.0",
+  "metadata": {
+    "author": "Frevana-AI",
+    "createdAt": "2025-12-15T08:00:00.000Z",
+    "description": "Optimizes existing article content with SEO improvements and better structure"
+  },
+  "frequency": "-1",
+  "workflowConnects": []
+}
