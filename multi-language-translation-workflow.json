@@ -77,7 +77,7 @@
           "nameV2": "Smart Translation",
           "type": "ai_prompt",
           "outputFormat": "text",
-          "model": "gpt-4o",
+          "model": "gpt-5.1",
           "prompt": "You are a professional HTML translator. Analyze the following JSON data and respond accordingly:\n\nJSON Data:\n@[Substep-3 Get Content for Translation](get-content-for-translation)\n\nTarget Language: @[Current item in loop](translate-all-languages-loop-loop)\n\nINSTRUCTIONS:\n1. Parse the JSON above\n2. Check if the field 'skipAI' is true:\n   - If YES: Return exactly this text: SKIP_TRANSLATION_EXISTS\n   - If NO: Extract 'originalHtml' field and translate all text content to the target language\n\nTRANSLATION RULES (only if skipAI is false):\n- Preserve ALL HTML tags, attributes, and structure EXACTLY\n- Translate ONLY visible text content within tags\n- Do NOT translate: URLs, class names, IDs, or any HTML attributes\n- Maintain formatting and structure\n- Translate <title> tag content\n\nReturn ONLY the translated HTML content OR the text 'SKIP_TRANSLATION_EXISTS' (no JSON wrapper, no explanations, no markdown code blocks).",
           "nodeIds": ["get-content-for-translation", "translate-all-languages-loop-loop"]
         },
