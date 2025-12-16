@@ -23,8 +23,16 @@
       "nameV2": "Setup",
       "type": "script",
       "outputFormat": "text",
-      "script": "module.exports = async function() {\n  const contentUrl = data['content-url-input'] || '';\n  const languagesStr = data['target-languages-input'] || '';\n  \n  if (!contentUrl || !languagesStr) throw new Error('URL and languages required');\n  \n  // Extract content ID\n  const urlParts = contentUrl.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  const contentId = lastPart.split('-').pop();\n  if (!contentId || contentId.length < 10) throw new Error('Invalid content ID');\n  \n  // Parse languages\n  const languages = languagesStr.split(',').map(l => l.trim().toLowerCase()).filter(l => l);\n  if (languages.length === 0) throw new Error('No valid languages');\n  \n  console.log(`Content: ${contentId}, Languages: ${languages.join(', ')}`);\n  \n  // Download original\n  let fullUrl = contentUrl.startsWith('http') ? contentUrl : `https://${contentUrl}`;\n  const response = await api.fetch(fullUrl);\n  const originalHtml = await response.text();\n  if (!originalHtml) throw new Error('Empty content');\n  \n  console.log(`Downloaded ${originalHtml.length} chars`);\n  \n  // Store full data in global context\n  globalThis.translationContext = { contentId, originalHtml };\n  \n  // Return only languages list for loop iteration\n  return languages.join('\\n');\n};",
+      "script": "module.exports = async function() {\n  const contentUrl = data['content-url-input'] || '';\n  const languagesStr = data['target-languages-input'] || '';\n  \n  if (!contentUrl || !languagesStr) throw new Error('URL and languages required');\n  \n  // Extract content ID\n  const urlParts = contentUrl.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  const contentId = lastPart.split('-').pop();\n  if (!contentId || contentId.length < 10) throw new Error('Invalid content ID');\n  \n  // Parse languages\n  const languages = languagesStr.split(',').map(l => l.trim().toLowerCase()).filter(l => l);\n  if (languages.length === 0) throw new Error('No valid languages');\n  \n  console.log(`Content: ${contentId}, Languages: ${languages.join(', ')}`);\n  \n  // Download original\n  let fullUrl = contentUrl.startsWith('http') ? contentUrl : `https://${contentUrl}`;\n  const response = await api.fetch(fullUrl);\n  const originalHtml = await response.text();\n  if (!originalHtml) throw new Error('Empty content');\n  \n  console.log(`Downloaded ${originalHtml.length} chars`);\n  \n  // Return data structure with languages list for loop\n  return JSON.stringify({\n    contentId,\n    languages,\n    originalHtml\n  });\n};",
       "nodeIds": ["content-url-input", "target-languages-input"]
+    },
+    {
+      "id": "extract-languages",
+      "nameV2": "Extract Languages",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const setupData = JSON.parse(data['setup'] || '{}');\n  const languages = setupData.languages || [];\n  \n  if (languages.length === 0) {\n    throw new Error('No languages to translate');\n  }\n  \n  console.log(`Extracted ${languages.length} languages: ${languages.join(', ')}`);\n  return languages.join('\\n');\n};",
+      "nodeIds": ["setup"]
     },
     {
       "id": "translate-loop",
@@ -37,7 +45,7 @@
           "nameV2": "Check & Prepare",
           "type": "script",
           "outputFormat": "text",
-          "script": "module.exports = async function() {\n  // Get data from global context and loop variable\n  const ctx = globalThis.translationContext || {};\n  const lang = data['translate-loop-loop'] || '';\n  const contentId = ctx.contentId;\n  \n  if (!contentId) throw new Error('Missing content ID from setup');\n  \n  console.log(`[${lang}] Start`);\n  \n  // Check existing\n  const versionsResp = await api.frevanaApi.request('GET', `/s3/content/${contentId}/language-versions`);\n  \n  if (versionsResp.ok && versionsResp.data?.versions) {\n    const existing = versionsResp.data.versions.find(v => v.language_code === lang);\n    if (existing) {\n      let url = existing.url || '';\n      if (url && !url.startsWith('http')) url = `https://${url}`;\n      console.log(`[${lang}] Exists`);\n      return JSON.stringify({ skip: true, lang, status: 'existing', id: existing.content_id, url });\n    }\n  }\n  \n  // Prepare new\n  const prepResp = await api.frevanaApi.request('POST', `/s3/content/${contentId}/prepare-translate`, { target_language: lang });\n  if (!prepResp.ok) throw new Error(`[${lang}] Prepare failed`);\n  \n  console.log(`[${lang}] Ready`);\n  return JSON.stringify({\n    skip: false,\n    lang,\n    html: ctx.originalHtml,\n    newId: prepResp.data.new_content_id,\n    uploadUrl: prepResp.data.upload_url\n  });\n};",
+          "script": "module.exports = async function() {\n  const setupData = JSON.parse(data['setup'] || '{}');\n  const lang = data['translate-loop-loop'] || '';\n  const contentId = setupData.contentId;\n  const originalHtml = setupData.originalHtml;\n  \n  if (!contentId) throw new Error('Missing content ID');\n  \n  console.log(`[${lang}] Start`);\n  \n  // Check existing\n  const versionsResp = await api.frevanaApi.request('GET', `/s3/content/${contentId}/language-versions`);\n  \n  if (versionsResp.ok && versionsResp.data?.versions) {\n    const existing = versionsResp.data.versions.find(v => v.language_code === lang);\n    if (existing) {\n      let url = existing.url || '';\n      if (url && !url.startsWith('http')) url = `https://${url}`;\n      console.log(`[${lang}] Exists`);\n      return JSON.stringify({ skip: true, lang, status: 'existing', id: existing.content_id, url });\n    }\n  }\n  \n  // Prepare new\n  const prepResp = await api.frevanaApi.request('POST', `/s3/content/${contentId}/prepare-translate`, { target_language: lang });\n  if (!prepResp.ok) throw new Error(`[${lang}] Prepare failed`);\n  \n  console.log(`[${lang}] Ready`);\n  return JSON.stringify({\n    skip: false,\n    lang,\n    html: originalHtml,\n    newId: prepResp.data.new_content_id,\n    uploadUrl: prepResp.data.upload_url\n  });\n};",
           "nodeIds": ["setup", "translate-loop-loop"]
         },
         {
@@ -58,8 +66,8 @@
           "nodeIds": ["check-prepare", "translate"]
         }
       ],
-      "prompt": "@[Step-1 Setup](setup)",
-      "nodeIds": ["setup"]
+      "prompt": "@[Step-2 Extract Languages](extract-languages)",
+      "nodeIds": ["extract-languages"]
     },
     {
       "id": "report",
@@ -75,7 +83,7 @@
     "content-url-input": ["https://cookie2-dev.frevana.com/content/en/cursor-vs-qoder-which-ai-coding-companion-delivers-maximum-developer-productivity-in-2025--lydwxrgmr4ccw"],
     "target-languages-input": ["zh, ja"]
   },
-  "version": "1.0.0",
+  "version": "2.0",
   "metadata": { 
     "author": "Cursor-AI", 
     "createdAt": "2025-12-16T12:30:00.000Z",
