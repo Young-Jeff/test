@@ -11,41 +11,57 @@
     {
       "id": "target-languages-input",
       "type": "keywords",
-      "name": "Target Languages",
-      "description": "Enter language codes separated by commas (e.g., zh, ja, es)",
+      "name": "Target Languages (comma-separated)",
+      "description": "Enter language codes separated by commas (e.g., zh, ja, es, fr, de)",
       "placeholder": "zh, ja, es",
       "required": true
     }
   ],
   "workflows": [
     {
-      "id": "setup",
-      "nameV2": "Setup: Parse & Download Original",
+      "id": "extract-content-id",
+      "nameV2": "Extract Content ID",
       "type": "script",
       "outputFormat": "text",
-      "script": "module.exports = async function() {\n  const contentUrl = data['content-url-input'] || '';\n  const languagesStr = data['target-languages-input'] || '';\n  \n  if (!contentUrl) throw new Error('Content URL is required');\n  if (!languagesStr) throw new Error('Target languages are required');\n  \n  // Extract content ID from URL (last segment after last dash)\n  const urlParts = contentUrl.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  const segments = lastPart.split('-');\n  const contentId = segments[segments.length - 1];\n  \n  if (!contentId || contentId.length < 10) {\n    throw new Error(`Invalid content ID: ${contentId}`);\n  }\n  \n  // Parse languages\n  const languages = languagesStr.split(',').map(l => l.trim().toLowerCase()).filter(l => l);\n  if (languages.length === 0) throw new Error('No valid languages found');\n  \n  console.log(`Content ID: ${contentId}`);\n  console.log(`Languages: ${languages.join(', ')}`);\n  \n  // Call prepare-translate with first language to get download_url\n  const firstLang = languages[0];\n  console.log(`Calling prepare-translate with ${firstLang} to get download URL...`);\n  \n  const prepareResponse = await api.frevanaApi.request(\n    'POST',\n    `/s3/content/${contentId}/prepare-translate`,\n    { target_language: firstLang }\n  );\n  \n  if (!prepareResponse.ok) {\n    throw new Error(`Failed to prepare translation: ${JSON.stringify(prepareResponse.data)}`);\n  }\n  \n  const downloadUrl = prepareResponse.data.download_url;\n  if (!downloadUrl) throw new Error('Download URL not found');\n  \n  // Download original HTML from S3\n  console.log('Downloading original HTML from S3...');\n  const response = await api.fetch(downloadUrl);\n  const originalHtml = await response.text();\n  \n  if (!originalHtml) throw new Error('Downloaded content is empty');\n  console.log(`Downloaded ${originalHtml.length} characters`);\n  \n  // Return setup data\n  return JSON.stringify({\n    contentId,\n    languages: languages.join('\\n'),\n    originalHtml,\n    firstLanguagePrepare: prepareResponse.data\n  });\n};",
-      "nodeIds": ["content-url-input", "target-languages-input"]
+      "script": "module.exports = async function() {\n  const url = data['content-url-input'] || '';\n  if (!url) throw new Error('Content URL is required');\n  \n  const urlParts = url.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  const segments = lastPart.split('-');\n  const contentId = segments[segments.length - 1];\n  \n  if (!contentId || contentId.length < 10) {\n    throw new Error(`Invalid content ID: ${contentId}`);\n  }\n  \n  console.log(`Content ID: ${contentId}`);\n  return contentId;\n};",
+      "nodeIds": ["content-url-input"]
     },
     {
-      "id": "translate-loop",
-      "nameV2": "Translate All Languages",
+      "id": "parse-languages",
+      "nameV2": "Parse Target Languages",
+      "type": "python_script",
+      "outputFormat": "text",
+      "script": "import sys\n\ndef main():\n    languages_str = data.get('target-languages-input', '').strip()\n    if not languages_str:\n        raise Exception('At least one target language is required')\n    \n    languages = [lang.strip().lower() for lang in languages_str.split(',') if lang.strip()]\n    if len(languages) == 0:\n        raise Exception('No valid languages found')\n    \n    print(f'Translating to {len(languages)} languages: {\", \".join(languages)}', file=sys.stderr)\n    return '\\n'.join(languages)\n\nif __name__ == \"__main__\":\n    output = main()\n    print(output)",
+      "nodeIds": ["target-languages-input"]
+    },
+    {
+      "id": "download-original-content-once",
+      "nameV2": "Download Original Content (Once)",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const contentUrl = data['content-url-input'] || '';\n  const contentId = data['extract-content-id'] || '';\n  \n  if (!contentUrl || !contentId) throw new Error('Content URL and ID required');\n  \n  let fullUrl = contentUrl;\n  if (!fullUrl.startsWith('http')) fullUrl = `https://${fullUrl}`;\n  \n  console.log(`Downloading from: ${fullUrl}`);\n  const response = await api.fetch(fullUrl);\n  const htmlContent = await response.text();\n  \n  if (!htmlContent) throw new Error('Downloaded content is empty');\n  console.log(`Downloaded ${htmlContent.length} characters`);\n  \n  return JSON.stringify({\n    contentId: contentId,\n    originalHtml: htmlContent,\n    htmlLength: htmlContent.length\n  });\n};",
+      "nodeIds": ["content-url-input", "extract-content-id"]
+    },
+    {
+      "id": "translate-all-languages-loop",
+      "nameV2": "Translate to All Languages",
       "type": "loop",
       "outputFormat": "text",
       "subNodes": [
         {
           "id": "check-and-prepare",
-          "nameV2": "Check & Prepare Translation",
+          "nameV2": "Check & Prepare",
           "type": "script",
           "outputFormat": "text",
-          "script": "module.exports = async function() {\n  const setupData = JSON.parse(data['setup'] || '{}');\n  const targetLang = data['translate-loop-loop'] || '';\n  const contentId = setupData.contentId;\n  const firstLangPrepare = setupData.firstLanguagePrepare;\n  \n  console.log(`[${targetLang}] Processing...`);\n  \n  // Check if translation already exists\n  const versionsResponse = await api.frevanaApi.request(\n    'GET',\n    `/s3/content/${contentId}/language-versions`\n  );\n  \n  if (versionsResponse.ok && versionsResponse.data?.versions) {\n    const existing = versionsResponse.data.versions.find(v => v.language_code === targetLang);\n    if (existing) {\n      let url = existing.url || '';\n      if (url && !url.startsWith('http')) url = `https://${url}`;\n      \n      console.log(`[${targetLang}] Translation already exists`);\n      return JSON.stringify({\n        skip: true,\n        language: targetLang,\n        status: 'existing',\n        contentId: existing.content_id,\n        url\n      });\n    }\n  }\n  \n  // Check if this is the first language (already prepared)\n  if (targetLang === firstLangPrepare?.target_language) {\n    console.log(`[${targetLang}] Using pre-prepared data`);\n    return JSON.stringify({\n      skip: false,\n      language: targetLang,\n      originalHtml: setupData.originalHtml,\n      newContentId: firstLangPrepare.new_content_id,\n      uploadUrl: firstLangPrepare.upload_url,\n      contentGroupId: firstLangPrepare.content_group_id\n    });\n  }\n  \n  // Prepare new translation\n  console.log(`[${targetLang}] Preparing new translation...`);\n  const prepareResponse = await api.frevanaApi.request(\n    'POST',\n    `/s3/content/${contentId}/prepare-translate`,\n    { target_language: targetLang }\n  );\n  \n  if (!prepareResponse.ok) {\n    throw new Error(`[${targetLang}] Failed to prepare: ${JSON.stringify(prepareResponse.data)}`);\n  }\n  \n  return JSON.stringify({\n    skip: false,\n    language: targetLang,\n    originalHtml: setupData.originalHtml,\n    newContentId: prepareResponse.data.new_content_id,\n    uploadUrl: prepareResponse.data.upload_url,\n    contentGroupId: prepareResponse.data.content_group_id\n  });\n};",
-          "nodeIds": ["setup", "translate-loop-loop"]
+          "script": "module.exports = async function() {\n  const originalData = JSON.parse(data['download-original-content-once'] || '{}');\n  const contentId = originalData.contentId;\n  const targetLang = data['translate-all-languages-loop-loop'] || '';\n  \n  console.log(`[${targetLang}] Processing...`);\n  \n  // Check if translation exists\n  const versionsResponse = await api.frevanaApi.request(\n    'GET',\n    `/s3/content/${contentId}/language-versions`\n  );\n  \n  if (versionsResponse.ok && versionsResponse.data?.versions) {\n    const existing = versionsResponse.data.versions.find(v => v.language_code === targetLang);\n    if (existing) {\n      let url = existing.url || '';\n      if (url && !url.startsWith('http')) url = `https://${url}`;\n      console.log(`[${targetLang}] Already exists`);\n      return JSON.stringify({\n        skip: true,\n        language: targetLang,\n        status: 'existing',\n        contentId: existing.content_id,\n        url\n      });\n    }\n  }\n  \n  // Prepare new translation\n  console.log(`[${targetLang}] Preparing...`);\n  const prepareResponse = await api.frevanaApi.request(\n    'POST',\n    `/s3/content/${contentId}/prepare-translate`,\n    { target_language: targetLang }\n  );\n  \n  if (!prepareResponse.ok) {\n    throw new Error(`[${targetLang}] Prepare failed: ${JSON.stringify(prepareResponse.data)}`);\n  }\n  \n  // Return minimal data needed for AI\n  return JSON.stringify({\n    skip: false,\n    language: targetLang,\n    originalHtml: originalData.originalHtml,\n    newContentId: prepareResponse.data.new_content_id,\n    uploadUrl: prepareResponse.data.upload_url\n  });\n};",
+          "nodeIds": ["download-original-content-once", "translate-all-languages-loop-loop"]
         },
         {
           "id": "translate-ai",
           "nameV2": "AI Translation",
           "type": "ai_prompt",
           "outputFormat": "text",
-          "prompt": "You are a professional translator.\n\nPrevious step data:\n@[Substep-1 Check & Prepare Translation](check-and-prepare)\n\nInstructions:\n1. Parse the JSON above\n2. If \"skip\" is true, return the JSON as-is (no translation needed)\n3. If \"skip\" is false, translate the \"originalHtml\" to the target \"language\"\n\nTranslation rules:\n- Preserve ALL HTML tags, attributes, and structure\n- Only translate visible text content\n- Translate <title> content too\n- Keep URLs, links, images unchanged\n- Return ONLY the translated HTML (no JSON wrapper)\n\nIf skip=true, return the exact JSON. If skip=false, return only the translated HTML.",
+          "prompt": "Translate HTML to target language. Extract data from JSON:\n@[Substep-1 Check & Prepare](check-and-prepare)\n\nIf skip=true: return JSON as-is.\nIf skip=false: extract 'originalHtml', translate to 'language', return ONLY translated HTML (no JSON, no explanations).\n\nPreserve all HTML tags, URLs, and structure. Translate text content only.",
           "model": "gpt-5.1",
           "nodeIds": ["check-and-prepare"]
         },
@@ -54,32 +70,39 @@
           "nameV2": "Upload & Confirm",
           "type": "script",
           "outputFormat": "text",
-          "script": "module.exports = async function() {\n  const prepareData = JSON.parse(data['check-and-prepare'] || '{}');\n  const aiOutput = data['translate-ai'] || '';\n  const lang = prepareData.language;\n  \n  // If skipped (existing translation)\n  if (prepareData.skip) {\n    console.log(`[${lang}] Skipped (existing)`);\n    return JSON.stringify({\n      language: lang,\n      status: 'existing',\n      contentId: prepareData.contentId,\n      url: prepareData.url\n    });\n  }\n  \n  // Upload translated HTML\n  const translatedHtml = aiOutput;\n  if (!translatedHtml) throw new Error(`[${lang}] No translated content`);\n  \n  console.log(`[${lang}] Uploading ${translatedHtml.length} chars...`);\n  \n  const uploadResponse = await api.fetch(prepareData.uploadUrl, {\n    method: 'PUT',\n    headers: { 'Content-Type': 'text/html' },\n    body: translatedHtml\n  });\n  \n  if (uploadResponse.status !== 200 && uploadResponse.status !== 204) {\n    throw new Error(`[${lang}] Upload failed: HTTP ${uploadResponse.status}`);\n  }\n  \n  // Extract title from translated HTML\n  let title = 'Translated Content';\n  const titleMatch = translatedHtml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n  if (titleMatch?.[1]) title = titleMatch[1].trim();\n  \n  // Confirm translation\n  console.log(`[${lang}] Confirming...`);\n  const confirmResponse = await api.frevanaApi.request(\n    'POST',\n    '/s3/content/confirm-translate',\n    { new_content_id: prepareData.newContentId, title }\n  );\n  \n  if (!confirmResponse.ok) {\n    throw new Error(`[${lang}] Confirm failed: ${JSON.stringify(confirmResponse.data)}`);\n  }\n  \n  let url = confirmResponse.data.url || '';\n  if (url && !url.startsWith('http')) url = `https://${url}`;\n  \n  console.log(`[${lang}] Done: ${url}`);\n  \n  return JSON.stringify({\n    language: lang,\n    status: 'new',\n    contentId: prepareData.newContentId,\n    title,\n    url\n  });\n};",
+          "script": "module.exports = async function() {\n  const prepareData = JSON.parse(data['check-and-prepare'] || '{}');\n  const aiOutput = data['translate-ai'] || '';\n  const lang = prepareData.language;\n  \n  // If existing translation\n  if (prepareData.skip) {\n    console.log(`[${lang}] Skipped (existing)`);\n    return JSON.stringify({\n      language: lang,\n      status: 'existing',\n      contentId: prepareData.contentId,\n      url: prepareData.url\n    });\n  }\n  \n  // Upload new translation\n  const translatedHtml = aiOutput;\n  if (!translatedHtml) throw new Error(`[${lang}] No content`);\n  \n  console.log(`[${lang}] Uploading...`);\n  const uploadResponse = await api.fetch(prepareData.uploadUrl, {\n    method: 'PUT',\n    headers: { 'Content-Type': 'text/html' },\n    body: translatedHtml\n  });\n  \n  if (uploadResponse.status !== 200 && uploadResponse.status !== 204) {\n    throw new Error(`[${lang}] Upload failed: ${uploadResponse.status}`);\n  }\n  \n  // Extract title\n  let title = 'Translated Content';\n  const titleMatch = translatedHtml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n  if (titleMatch?.[1]) title = titleMatch[1].trim();\n  \n  // Confirm\n  console.log(`[${lang}] Confirming...`);\n  const confirmResponse = await api.frevanaApi.request(\n    'POST',\n    '/s3/content/confirm-translate',\n    { new_content_id: prepareData.newContentId, title }\n  );\n  \n  if (!confirmResponse.ok) {\n    throw new Error(`[${lang}] Confirm failed`);\n  }\n  \n  let url = confirmResponse.data.url || '';\n  if (url && !url.startsWith('http')) url = `https://${url}`;\n  console.log(`[${lang}] Done`);\n  \n  return JSON.stringify({\n    language: lang,\n    status: 'new',\n    contentId: prepareData.newContentId,\n    title,\n    url\n  });\n};",
           "nodeIds": ["check-and-prepare", "translate-ai"]
         }
       ],
-      "prompt": "@[Step-1 Setup: Parse & Download Original](setup)",
-      "nodeIds": ["setup"]
+      "prompt": "@[Step-2 Parse Target Languages](parse-languages)",
+      "nodeIds": ["parse-languages", "download-original-content-once"]
+    },
+    {
+      "id": "aggregate-results",
+      "nameV2": "Aggregate Results",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const loopResults = data['translate-all-languages-loop'] || '';\n  if (!loopResults) {\n    return JSON.stringify({ success: false, message: 'No results' }, null, 2);\n  }\n  \n  let results = [];\n  try {\n    if (loopResults.trim().startsWith('[')) {\n      const jsonArray = JSON.parse(loopResults);\n      results = jsonArray.map(item => typeof item === 'string' ? JSON.parse(item) : item);\n    } else {\n      const lines = loopResults.split('\\n').filter(line => line.trim());\n      results = lines.map(line => JSON.parse(line));\n    }\n  } catch (e) {\n    return JSON.stringify({ success: false, message: e.message }, null, 2);\n  }\n  \n  const newCount = results.filter(r => r.status === 'new').length;\n  const existingCount = results.filter(r => r.status === 'existing').length;\n  const errorCount = results.filter(r => r.error).length;\n  \n  const summary = {\n    success: errorCount === 0,\n    totalLanguages: results.length,\n    statistics: {\n      newTranslations: newCount,\n      existingTranslations: existingCount,\n      errors: errorCount\n    },\n    translations: results.map(r => ({\n      language: r.language || 'unknown',\n      status: r.status || 'error',\n      contentId: r.contentId || '',\n      url: r.url || '',\n      title: r.title || '',\n      error: r.error\n    }))\n  };\n  \n  console.log(`\\n=== Summary: ${newCount} new, ${existingCount} existing, ${errorCount} errors ===\\n`);\n  return JSON.stringify(summary, null, 2);\n};",
+      "nodeIds": ["translate-all-languages-loop"]
     },
     {
       "id": "format-output",
       "nameV2": "Format Report",
       "type": "ai_prompt",
       "outputFormat": "text",
-      "prompt": "Format the translation results into a markdown report.\n\nLoop Results (JSON array):\n@[Step-2 Translate All Languages](translate-loop)\n\nCreate a clean markdown report:\n1. Summary: total languages, new vs existing\n2. Table with: Language | Status | URL\n3. Any notes or errors\n\nKeep it concise and professional.",
-      "nodeIds": ["translate-loop"]
+      "prompt": "Format this JSON into a clean markdown report:\n@[Step-4 Aggregate Results](aggregate-results)\n\nInclude: summary, table (Language | Status | URL), statistics. Keep it concise.",
+      "nodeIds": ["aggregate-results"]
     }
   ],
   "results": [{ "type": "plain_text", "fields": [], "items": { "content": "format-output" } }],
   "inputValues": {
-    "content-url-input": [
-      "https://cookie2-dev.frevana.com/content/en/cursor-vs-qoder-which-ai-coding-companion-delivers-maximum-developer-productivity-in-2025--lydwxrgmr4ccw"
-    ],
-    "target-languages-input": ["zh", "ja"]
+    "content-url-input": ["https://cookie2-dev.frevana.com/content/en/cursor-vs-qoder-which-ai-coding-companion-delivers-maximum-developer-productivity-in-2025--lydwxrgmr4ccw"],
+    "target-languages-input": ["zh, ja"]
   },
-  "version": "1.0",
-  "metadata": { "author": "Jeff-1", "createdAt": "2025-12-16T07:23:39.392Z" },
+  "version": "1.0-optimized",
+  "metadata": { "author": "Cursor-AI", "createdAt": "2025-12-16T12:00:00.000Z", "description": "Optimized multi-language translation workflow with simplified AI prompt" },
   "frequency": "-1",
   "mcpConfigs": {},
   "workflowConnects": []
 }
+
