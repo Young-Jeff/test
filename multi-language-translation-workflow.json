@@ -47,6 +47,7 @@
       "nameV2": "Translate to All Languages",
       "type": "loop",
       "outputFormat": "text",
+      "nodeIds": ["parse-languages", "download-original-content-once"],
       "subNodes": [
         {
           "id": "check-existing-translation",
