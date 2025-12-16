@@ -75,10 +75,18 @@
         {
           "id": "translate-content-smart",
           "nameV2": "Smart Translation",
+          "type": "script",
+          "outputFormat": "text",
+          "script": "module.exports = async function() {\n  const contentResult = JSON.parse(data['get-content-for-translation'] || '{}');\n  const targetLanguage = contentResult.targetLanguage || '';\n  \n  // If translation already exists, return empty marker (skip AI completely)\n  if (contentResult.skipAI || contentResult.isExisting) {\n    console.log(`[${targetLanguage}] Translation exists, skipping AI completely (fast path)`);\n    return 'SKIP_TRANSLATION_EXISTS';\n  }\n  \n  // Only call AI if we need a new translation\n  console.log(`[${targetLanguage}] Calling AI for new translation...`);\n  const aiResult = await api.executeNode('translate-content-ai');\n  return aiResult || '';\n};",
+          "nodeIds": ["get-content-for-translation", "translate-all-languages-loop-loop"]
+        },
+        {
+          "id": "translate-content-ai",
+          "nameV2": "AI Translation",
           "type": "ai_prompt",
           "outputFormat": "text",
           "model": "gpt-5.1",
-          "prompt": "You are a professional HTML translator. Analyze the following JSON data and respond accordingly:\n\nJSON Data:\n@[Substep-3 Get Content for Translation](get-content-for-translation)\n\nTarget Language: @[Current item in loop](translate-all-languages-loop-loop)\n\nINSTRUCTIONS:\n1. Parse the JSON above\n2. Check if the field 'skipAI' is true:\n   - If YES: Return exactly this text: SKIP_TRANSLATION_EXISTS\n   - If NO: Extract 'originalHtml' field and translate all text content to the target language\n\nTRANSLATION RULES (only if skipAI is false):\n- Preserve ALL HTML tags, attributes, and structure EXACTLY\n- Translate ONLY visible text content within tags\n- Do NOT translate: URLs, class names, IDs, or any HTML attributes\n- Maintain formatting and structure\n- Translate <title> tag content\n\nReturn ONLY the translated HTML content OR the text 'SKIP_TRANSLATION_EXISTS' (no JSON wrapper, no explanations, no markdown code blocks).",
+          "prompt": "You are a professional HTML translator. Translate the following HTML content.\n\nIMPORTANT:\n1. Preserve all HTML tags, attributes, and structure exactly as they are\n2. Only translate text content within HTML tags, not the tags themselves\n3. Preserve all URLs, links, and image sources unchanged\n4. Maintain the same formatting and structure\n5. Translate all visible text content accurately\n6. Translate the content inside <title> tags as well\n\nTarget Language: @[Current item in loop](translate-all-languages-loop-loop)\n\nExtract the 'originalHtml' field from this JSON:\n@[Substep-3 Get Content for Translation](get-content-for-translation)\n\nTranslate all text content to the target language and return ONLY the translated HTML (no JSON wrapper, no explanations).",
           "nodeIds": ["get-content-for-translation", "translate-all-languages-loop-loop"]
         },
         {
@@ -87,7 +95,11 @@
           "type": "script",
           "outputFormat": "text",
           "script": "module.exports = async function() {\n  const contentResult = JSON.parse(data['get-content-for-translation'] || '{}');\n  const translatedHtml = data['translate-content-smart'] || '';\n  const targetLanguage = contentResult.targetLanguage || '';\n  \n  // If translation exists (AI returned skip marker), skip upload entirely\n  if (contentResult.skipUpload || translatedHtml.trim() === 'SKIP_TRANSLATION_EXISTS') {\n    console.log(`[${targetLanguage}] Translation exists, skipping upload (fast path)`);\n    return JSON.stringify({\n      ...contentResult,\n      uploadStatus: 'skipped',\n      skipUpload: true\n    });\n  }\n  \n  const uploadUrl = contentResult.uploadUrl;\n  \n  if (!uploadUrl) {\n    throw new Error(`[${targetLanguage}] Upload URL not found`);\n  }\n  \n  if (!translatedHtml) {\n    throw new Error(`[${targetLanguage}] Translated HTML content is empty`);\n  }\n  \n  console.log(`[${targetLanguage}] Uploading translated content to S3 (${translatedHtml.length} characters)...`);\n  \n  // Upload translated HTML to S3 using presigned URL\n  const uploadResponse = await api.fetch(uploadUrl, {\n    method: 'PUT',\n    headers: {\n      'Content-Type': 'text/html'\n    },\n    body: translatedHtml\n  });\n  \n  if (uploadResponse.status !== 200 && uploadResponse.status !== 204) {\n    throw new Error(`[${targetLanguage}] Failed to upload translated content: HTTP ${uploadResponse.status}`);\n  }\n  \n  console.log(`[${targetLanguage}] Translated content uploaded successfully`);\n  \n  // Return JSON with upload confirmation\n  return JSON.stringify({\n    ...contentResult,\n    translatedHtml: translatedHtml,\n    uploadStatus: 'success',\n    skipUpload: false\n  });\n};",
-          "nodeIds": ["get-content-for-translation", "translate-content-smart"]
+          "nodeIds": [
+            "get-content-for-translation",
+            "translate-content-smart",
+            "translate-content-ai"
+          ]
         },
         {
           "id": "confirm-translation",
