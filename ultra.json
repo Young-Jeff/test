@@ -1,1 +1,88 @@
-1
+{
+  "userInputs": [
+    {
+      "id": "content-url-input",
+      "type": "input",
+      "name": "Original Content URL",
+      "description": "Enter the URL of the original content to translate",
+      "placeholder": "https://dev-www.frevana.com/content/...",
+      "required": true
+    },
+    {
+      "id": "target-languages-input",
+      "type": "keywords",
+      "name": "Target Languages",
+      "description": "Comma-separated language codes (e.g., zh, ja, es)",
+      "placeholder": "zh, ja, es",
+      "required": true
+    }
+  ],
+  "workflows": [
+    {
+      "id": "setup",
+      "nameV2": "Setup",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const contentUrl = data['content-url-input'] || '';\n  const languagesStr = data['target-languages-input'] || '';\n  \n  if (!contentUrl || !languagesStr) throw new Error('URL and languages required');\n  \n  // Extract content ID\n  const urlParts = contentUrl.split('/');\n  const lastPart = urlParts[urlParts.length - 1];\n  const contentId = lastPart.split('-').pop();\n  if (!contentId || contentId.length < 10) throw new Error('Invalid content ID');\n  \n  // Parse languages\n  const languages = languagesStr.split(',').map(l => l.trim().toLowerCase()).filter(l => l);\n  if (languages.length === 0) throw new Error('No valid languages');\n  \n  console.log(`Content: ${contentId}, Languages: ${languages.join(', ')}`);\n  \n  // Download original\n  let fullUrl = contentUrl.startsWith('http') ? contentUrl : `https://${contentUrl}`;\n  const response = await api.fetch(fullUrl);\n  const originalHtml = await response.text();\n  if (!originalHtml) throw new Error('Empty content');\n  \n  console.log(`Downloaded ${originalHtml.length} chars`);\n  \n  // Store full data in global context\n  globalThis.translationContext = { contentId, originalHtml };\n  \n  // Return only languages list for loop iteration\n  return languages.join('\\n');\n};",
+      "nodeIds": ["content-url-input", "target-languages-input"]
+    },
+    {
+      "id": "translate-loop",
+      "nameV2": "Translate All",
+      "type": "loop",
+      "outputFormat": "text",
+      "subNodes": [
+        {
+          "id": "check-prepare",
+          "nameV2": "Check & Prepare",
+          "type": "script",
+          "outputFormat": "text",
+          "script": "module.exports = async function() {\n  // Get data from global context and loop variable\n  const ctx = globalThis.translationContext || {};\n  const lang = data['translate-loop-loop'] || '';\n  const contentId = ctx.contentId;\n  \n  if (!contentId) throw new Error('Missing content ID from setup');\n  \n  console.log(`[${lang}] Start`);\n  \n  // Check existing\n  const versionsResp = await api.frevanaApi.request('GET', `/s3/content/${contentId}/language-versions`);\n  \n  if (versionsResp.ok && versionsResp.data?.versions) {\n    const existing = versionsResp.data.versions.find(v => v.language_code === lang);\n    if (existing) {\n      let url = existing.url || '';\n      if (url && !url.startsWith('http')) url = `https://${url}`;\n      console.log(`[${lang}] Exists`);\n      return JSON.stringify({ skip: true, lang, status: 'existing', id: existing.content_id, url });\n    }\n  }\n  \n  // Prepare new\n  const prepResp = await api.frevanaApi.request('POST', `/s3/content/${contentId}/prepare-translate`, { target_language: lang });\n  if (!prepResp.ok) throw new Error(`[${lang}] Prepare failed`);\n  \n  console.log(`[${lang}] Ready`);\n  return JSON.stringify({\n    skip: false,\n    lang,\n    html: ctx.originalHtml,\n    newId: prepResp.data.new_content_id,\n    uploadUrl: prepResp.data.upload_url\n  });\n};",
+          "nodeIds": ["setup", "translate-loop-loop"]
+        },
+        {
+          "id": "translate",
+          "nameV2": "Translate",
+          "type": "ai_prompt",
+          "outputFormat": "text",
+          "prompt": "Translate HTML. Data:\n@[Substep-1 Check & Prepare](check-prepare)\n\nIf skip=true: return JSON unchanged.\nIf skip=false: extract 'html', translate to 'lang', return ONLY translated HTML.\n\nKeep all tags/URLs. Translate text only.",
+          "model": "gpt-5.1",
+          "nodeIds": ["check-prepare"]
+        },
+        {
+          "id": "finish",
+          "nameV2": "Finish",
+          "type": "script",
+          "outputFormat": "text",
+          "script": "module.exports = async function() {\n  const prep = JSON.parse(data['check-prepare'] || '{}');\n  const ai = data['translate'] || '';\n  const lang = prep.lang;\n  \n  if (prep.skip) {\n    console.log(`[${lang}] Skip`);\n    return JSON.stringify({ lang, status: 'existing', id: prep.id, url: prep.url });\n  }\n  \n  if (!ai) throw new Error(`[${lang}] No content`);\n  \n  // Upload\n  const up = await api.fetch(prep.uploadUrl, {\n    method: 'PUT',\n    headers: { 'Content-Type': 'text/html' },\n    body: ai\n  });\n  if (up.status !== 200 && up.status !== 204) throw new Error(`[${lang}] Upload failed`);\n  \n  // Extract title\n  const titleMatch = ai.match(/<title[^>]*>([^<]+)<\\/title>/i);\n  const title = titleMatch?.[1]?.trim() || 'Translated';\n  \n  // Confirm\n  const conf = await api.frevanaApi.request('POST', '/s3/content/confirm-translate', { new_content_id: prep.newId, title });\n  if (!conf.ok) throw new Error(`[${lang}] Confirm failed`);\n  \n  let url = conf.data.url || '';\n  if (url && !url.startsWith('http')) url = `https://${url}`;\n  \n  console.log(`[${lang}] Done`);\n  return JSON.stringify({ lang, status: 'new', id: prep.newId, title, url });\n};",
+          "nodeIds": ["check-prepare", "translate"]
+        }
+      ],
+      "prompt": "@[Step-1 Setup](setup)",
+      "nodeIds": ["setup"]
+    },
+    {
+      "id": "report",
+      "nameV2": "Report",
+      "type": "script",
+      "outputFormat": "text",
+      "script": "module.exports = async function() {\n  const results = data['translate-loop'] || '';\n  if (!results) return JSON.stringify({ success: false });\n  \n  let items = [];\n  try {\n    const arr = results.trim().startsWith('[') ? JSON.parse(results) : results.split('\\n').filter(l => l.trim());\n    items = arr.map(item => typeof item === 'string' ? JSON.parse(item) : item);\n  } catch (e) {\n    return JSON.stringify({ success: false, error: e.message });\n  }\n  \n  const newCount = items.filter(i => i.status === 'new').length;\n  const existCount = items.filter(i => i.status === 'existing').length;\n  \n  console.log(`Summary: ${newCount} new, ${existCount} existing`);\n  \n  // Format simple markdown\n  let md = '# Translation Report\\n\\n';\n  md += `**Total:** ${items.length} | **New:** ${newCount} | **Existing:** ${existCount}\\n\\n`;\n  md += '| Language | Status | URL |\\n';\n  md += '|----------|--------|-----|\\n';\n  items.forEach(i => {\n    const urlDisplay = i.url ? `[Link](${i.url})` : 'N/A';\n    md += `| ${i.lang} | ${i.status} | ${urlDisplay} |\\n`;\n  });\n  \n  return md;\n};",
+      "nodeIds": ["translate-loop"]
+    }
+  ],
+  "results": [{ "type": "plain_text", "fields": [], "items": { "content": "report" } }],
+  "inputValues": {
+    "content-url-input": ["https://cookie2-dev.frevana.com/content/en/cursor-vs-qoder-which-ai-coding-companion-delivers-maximum-developer-productivity-in-2025--lydwxrgmr4ccw"],
+    "target-languages-input": ["zh, ja"]
+  },
+  "version": "2.0",
+  "metadata": { 
+    "author": "Cursor-AI", 
+    "createdAt": "2025-12-16T12:30:00.000Z",
+    "description": "Ultra-optimized workflow: merged steps, simplified code, ~50% less code"
+  },
+  "frequency": "-1",
+  "mcpConfigs": {},
+  "workflowConnects": []
+}
+
