@@ -78,7 +78,7 @@
           "type": "ai_prompt",
           "outputFormat": "text",
           "prompt": "You are a professional translator. Translate the following HTML content.\n\nIMPORTANT:\n1. Preserve all HTML tags, attributes, and structure exactly as they are\n2. Only translate text content within HTML tags, not the tags themselves\n3. Preserve all URLs, links, and image sources unchanged\n4. Maintain the same formatting and structure\n5. Translate all visible text content accurately\n6. Translate the content inside <title> tags as well\n7. Translate all text content including headings, paragraphs, lists, and any other text elements\n\nTarget Language Code: @[Current item in loop](translate-all-languages-loop-loop)\n\nOriginal HTML Content (extract from JSON):\n@[Substep-3 Get Content for Translation](get-content-for-translation)\n\nInstructions:\n- Extract the 'originalHtml' field from the JSON above\n- Translate all text content to the target language\n- Keep all HTML structure, tags, and attributes unchanged\n- Return ONLY the translated HTML content (no JSON wrapper, no explanations)\n\nIf the JSON contains 'isExisting: true', it means translation already exists, just return the 'translatedHtml' field content directly without any modifications.",
-          "model": "gpt-5.1-mini",
+          "model": "gpt-5-mini",
           "nodeIds": ["get-content-for-translation", "translate-all-languages-loop-loop"]
         },
         {
